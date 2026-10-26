@@ -47,7 +47,7 @@ interface WindowProps {
 }
 
 /* ───────────── Modal ───────────── */
-export function Modal({ open, onClose, title, description, children, footer, size = 'md' }: WindowProps & { size?: 'sm' | 'md' | 'lg' }) {
+export function Modal({ open, onClose, title, description, children, footer, size = 'md' }: WindowProps & { size?: 'sm' | 'md' | 'lg' | 'xl' }) {
   const { mounted, state } = usePresence(open, 190)
   const ref = useRef<HTMLDivElement>(null)
   const uid = useUid('modal')
@@ -61,6 +61,8 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         aria-hidden
         className={cn('absolute inset-0 bg-canvas/80 backdrop-blur-sm', state === 'open' ? 'animate-fade-in' : 'animate-fade-out')}
       />
+      {/* Смуга шапки лишається «ручкою» вікна: з відкритим діалогом його так само можна перетягувати */}
+      <div aria-hidden className="drag absolute inset-x-0 top-0 h-[76px]" />
       <div
         ref={ref}
         role="dialog"
@@ -69,8 +71,8 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         aria-describedby={description ? `${uid}-d` : undefined}
         tabIndex={-1}
         className={cn(
-          'relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-panel bg-tile shadow-dialog outline-none',
-          { sm: 'max-w-sm', md: 'max-w-xl', lg: 'max-w-3xl' }[size],
+          'no-drag relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-panel bg-tile shadow-dialog outline-none',
+          { sm: 'max-w-sm', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-[920px]' }[size],
           state === 'open' ? 'animate-modal-in' : 'animate-modal-out',
         )}
       >
@@ -93,7 +95,8 @@ export function Modal({ open, onClose, title, description, children, footer, siz
             <Icon name="x" size={18} />
           </button>
         </div>
-        {children && <div className="overflow-y-auto px-8 py-4">{children}</div>}
+        {/* Смуга прокрутки — всередині панелі, не на заокругленому краю */}
+        {children && <div className="mr-3 mb-3 overflow-y-auto py-4 pr-5 pl-8">{children}</div>}
         {footer && <div className="flex flex-wrap justify-end gap-2 p-8 pt-4">{footer}</div>}
       </div>
     </div>,
@@ -120,6 +123,7 @@ export function Sheet({ open, onClose, title, description, children, footer, sid
         aria-hidden
         className={cn('absolute inset-0 bg-night/70 backdrop-blur-sm', state === 'open' ? 'animate-fade-in' : 'animate-fade-out')}
       />
+      <div aria-hidden className="drag absolute inset-x-0 top-0 h-[76px]" />
       <div
         ref={ref}
         role="dialog"
@@ -127,7 +131,7 @@ export function Sheet({ open, onClose, title, description, children, footer, sid
         aria-labelledby={`${uid}-t`}
         tabIndex={-1}
         className={cn(
-          'absolute flex flex-col bg-graphite shadow-[0_0_120px_-10px_rgba(0,0,0,1)] ring-1 ring-white/10 outline-none',
+          'no-drag absolute flex flex-col bg-graphite shadow-[0_0_120px_-10px_rgba(0,0,0,1)] ring-1 ring-white/10 outline-none',
           side === 'bottom'
             ? 'inset-x-0 bottom-0 mx-auto max-h-[88vh] w-full max-w-2xl rounded-t-[40px]'
             : 'inset-y-0 right-0 w-full max-w-md rounded-l-[40px]',

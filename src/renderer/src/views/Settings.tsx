@@ -6,15 +6,20 @@ import type { UpdateState } from '../../../shared/types'
 
 export function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [s, set] = useSettings()
-  const update = useUpdateState()
   const toast = useToast()
 
   return (
-    <Modal open={open} onClose={onClose} title="Налаштування" size="md">
-      <div className="flex flex-col gap-3 pb-2">
-        <Group title="Синхронізація">
-          <SyncSection />
-        </Group>
+    <Modal open={open} onClose={onClose} title="Налаштування" size="xl">
+      {/* Дві колонки, щоб усе вміщалось без прокрутки; у вузькому вікні — одна */}
+      <div className="grid grid-cols-2 items-start gap-3 pb-2 max-[900px]:grid-cols-1">
+        <div className="flex flex-col gap-3">
+          <Group title="Синхронізація">
+            <SyncSection />
+          </Group>
+          <Group title={`Версія ${window.kast?.info.version ?? 'dev'}`}>
+            <UpdateRow />
+          </Group>
+        </div>
         <Group title="Поведінка">
           <SettingRow title="Швидкий запис" text="Працює з будь-якої програми">
             <HotkeyInput
@@ -34,27 +39,31 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
             <Switch label="Запуск разом із Windows" checked={s.launchAtLogin} onChange={(launchAtLogin) => set({ launchAtLogin })} />
           </SettingRow>
         </Group>
-        <Group title={`Версія ${window.kast?.info.version ?? 'dev'}`}>
-          <SettingRow title="Оновлення" text={updateText(update)}>
-            {update.kind === 'ready' ? (
-              <Button size="sm" variant="pulse" onClick={() => window.kast.updates.install()}>
-                Перезапустити
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                variant="steel"
-                loading={update.kind === 'checking' || update.kind === 'downloading'}
-                disabled={update.kind === 'dev'}
-                onClick={() => window.kast?.updates.check()}
-              >
-                Перевірити
-              </Button>
-            )}
-          </SettingRow>
-        </Group>
       </div>
     </Modal>
+  )
+}
+
+function UpdateRow() {
+  const update = useUpdateState()
+  return (
+    <SettingRow title="Оновлення" text={updateText(update)}>
+      {update.kind === 'ready' ? (
+        <Button size="sm" variant="pulse" onClick={() => window.kast.updates.install()}>
+          Перезапустити
+        </Button>
+      ) : (
+        <Button
+          size="sm"
+          variant="steel"
+          loading={update.kind === 'checking' || update.kind === 'downloading'}
+          disabled={update.kind === 'dev'}
+          onClick={() => window.kast?.updates.check()}
+        >
+          Перевірити
+        </Button>
+      )}
+    </SettingRow>
   )
 }
 

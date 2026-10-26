@@ -13,6 +13,7 @@ const TIMEOUT_MS = 5 * 60_000
 
 let server: Server | null = null
 let port = 0
+let preparedTimer: ReturnType<typeof setTimeout> | undefined
 let pending: { resolve: (r: OAuthResult) => void; timer: ReturnType<typeof setTimeout> } | null = null
 let onReturn: () => void = () => {}
 
@@ -26,14 +27,17 @@ p{margin:18px 0 0;font-size:16px;font-weight:600;color:#a1a1a6}</style></head>
 <h1>${title}</h1><p>${text}</p></main></body></html>`
 
 function finish(result: OAuthResult) {
-  if (!pending) return
-  clearTimeout(pending.timer)
-  pending.resolve(result)
+  const current = pending
   pending = null
-  setTimeout(stop, 1000)
+  stop()
+  if (!current) return
+  clearTimeout(current.timer)
+  current.resolve(result)
 }
 
 function stop() {
+  clearTimeout(preparedTimer)
+  preparedTimer = undefined
   server?.close()
   server = null
   port = 0
@@ -46,6 +50,10 @@ async function listen(): Promise<void> {
         const url = new URL(req.url ?? '/', `http://127.0.0.1:${p}`)
         if (url.pathname !== '/auth/callback') {
           res.writeHead(404).end()
+          return
+        }
+        if (req.method !== 'GET' || !pending) {
+          res.writeHead(400).end()
           return
         }
         const code = url.searchParams.get('code')
@@ -69,7 +77,10 @@ async function listen(): Promise<void> {
 
 /** Крок 1: підняти локальну адресу й повернути redirect для Supabase */
 export async function prepareOAuth(): Promise<string> {
+  if (pending) finish({ error: 'Попередній вхід скасовано' })
   if (!server) await listen()
+  clearTimeout(preparedTimer)
+  preparedTimer = setTimeout(stop, TIMEOUT_MS)
   return `http://127.0.0.1:${port}/auth/callback`
 }
 
@@ -77,11 +88,16 @@ export async function prepareOAuth(): Promise<string> {
 export function openOAuth(url: string, focusApp: () => void): Promise<OAuthResult> {
   const parsed = new URL(url)
   if (parsed.protocol !== 'https:') return Promise.resolve({ error: 'Небезпечна адреса входу' })
-  if (pending) finish({ error: 'Попередній вхід скасовано' })
+  if (!server || pending) return Promise.resolve({ error: 'Почніть вхід ще раз' })
+  clearTimeout(preparedTimer)
+  preparedTimer = undefined
   onReturn = focusApp
   return new Promise((resolve) => {
-    pending = { resolve, timer: setTimeout(() => finish({ error: 'Час на вхід вийшов' }), TIMEOUT_MS) }
-    shell.openExternal(url)
+    const current = { resolve, timer: setTimeout(() => finish({ error: 'Час на вхід вийшов' }), TIMEOUT_MS) }
+    pending = current
+    shell.openExternal(url).catch(() => {
+      if (pending === current) finish({ error: 'Не вдалося відкрити браузер. Спробуйте ще раз.' })
+    })
   })
 }
 

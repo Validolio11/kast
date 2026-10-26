@@ -1,5 +1,5 @@
 import { addDays, DAY, dayKey, now } from '@/lib/time'
-import { db, getMeta, setMeta, type Day, type Task, type TaskKind, type When } from './db'
+import { db, getMeta, type Day, type Task, type TaskKind, type When } from './db'
 
 /** Ліміти дня: вибір із ≤3 головних не перевантажує (метод Айві Лі / 1-3-5) */
 export const MAIN_LIMIT = 3
@@ -177,11 +177,21 @@ export async function sweepStale() {
   return stale.length
 }
 
+/*
+ * Час останнього тижневого перегляду — спільний для всіх ПК акаунта: зберігаємо його службовим
+ * записом у таблиці днів (ключ 'review'), яка синхронізується. Старе локальне значення — запасне.
+ */
 const REVIEW_KEY = 'lastReviewAt'
+const REVIEW_DAY = 'review'
+async function lastReviewAt() {
+  const synced = (await db.days.get(REVIEW_DAY))?.plannedAt
+  return synced ?? (await getMeta<number>(REVIEW_KEY, 0))
+}
+const markReviewed = () => patchDay(REVIEW_DAY, { plannedAt: now() })
 
 /** Задачі, що застаріли з часу останнього перегляду. Перегляд пропонується раз на тиждень. */
 export async function reviewCandidates(): Promise<Task[]> {
-  const last = await getMeta<number>(REVIEW_KEY, 0)
+  const last = await lastReviewAt()
   if (now() - last < 6 * DAY) return []
   const rows = await db.tasks.where('status').equals('someday').toArray()
   return rows.filter((t) => !t.deleted && t.staleAt && t.staleAt > last)
@@ -194,7 +204,7 @@ export async function finishReview(choices: Record<string, ReviewChoice>) {
     if (c === 'keep') await toInbox(id)
     else if (c === 'delete') await remove(id)
   }
-  await setMeta(REVIEW_KEY, now())
+  await markReviewed()
 }
 
-export const skipReview = () => setMeta(REVIEW_KEY, now())
+export const skipReview = () => markReviewed()

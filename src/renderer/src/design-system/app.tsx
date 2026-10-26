@@ -831,7 +831,7 @@ export function ContextMenu({
         if ((e.target as HTMLElement).closest('button')) e.preventDefault()
       }}
       onContextMenu={(e) => e.preventDefault()}
-      className="fixed z-[130] flex w-[288px] origin-top-left animate-menu-in flex-col gap-0.5 rounded-[26px] bg-canvas p-1.5 text-white shadow-menu"
+      className="no-drag fixed z-[130] flex w-[288px] origin-top-left animate-menu-in flex-col gap-0.5 rounded-[26px] bg-canvas p-1.5 text-white shadow-menu"
       style={pos}
     >
       {header && <div className="mb-1 border-b border-tile px-1 pt-1 pb-2.5">{header}</div>}

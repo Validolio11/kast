@@ -208,16 +208,21 @@ export function startSync() {
  * й чекає повернення на 127.0.0.1, далі одноразовий код обмінюємо на сесію (PKCE).
  */
 export async function signInWithGoogle() {
+  if (!supabase) throw new Error('Синхронізацію ще не налаштовано')
   const redirectTo = await window.kast.auth.prepare()
-  const { data, error } = await supabase!.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo, skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } },
-  })
-  if (error) throw error
-  const result = await window.kast.auth.open(data.url)
-  if (result.error !== undefined) throw new Error(result.error)
-  const { error: exchange } = await supabase!.auth.exchangeCodeForSession(result.code)
-  if (exchange) throw exchange
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo, skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } },
+    })
+    if (error) throw error
+    const result = await window.kast.auth.open(data.url)
+    if (result.error !== undefined) throw new Error(result.error)
+    const { error: exchange } = await supabase.auth.exchangeCodeForSession(result.code)
+    if (exchange) throw exchange
+  } finally {
+    window.kast.auth.cancel()
+  }
 }
 
 export const cancelGoogle = () => window.kast?.auth.cancel()

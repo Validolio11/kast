@@ -30,11 +30,19 @@ pnpm dev
 
 ## Синхронізація (необов'язково)
 
+### Поточний проєкт Kast
+
+- [Supabase Dashboard](https://supabase.com/dashboard/project/johgerfwsfppdrqwmufk) — проєкт **Kast** в **MelychynIvan's Org**.
+- API URL: `https://johgerfwsfppdrqwmufk.supabase.co`.
+- Google OAuth client: **Kast Supabase** у Google Cloud проєкті **Karkas**. Google redirect URI: `https://johgerfwsfppdrqwmufk.supabase.co/auth/v1/callback`.
+- Локальний `.env` містить `RENDERER_VITE_SUPABASE_URL` і publishable key у `RENDERER_VITE_SUPABASE_ANON_KEY`; `.env` виключено з Git. Після зміни цих значень перезапустіть `pnpm dev`, зберігши той самий host і порт, щоб залишився доступ до локальних даних.
+- `supabase/verify.sql` перевіряє ізоляцію користувачів і last-write-wins у транзакції з повним `ROLLBACK`; виконуйте весь файл у SQL Editor.
+
 Без ключів Kast працює лише локально. Щоб увімкнути:
 
 1. Створіть проєкт на [supabase.com](https://supabase.com).
 2. SQL Editor → виконайте `supabase/schema.sql`.
-3. Скопіюйте `.env.example` у `.env` і впишіть URL та anon key (Settings → API).
+3. Скопіюйте `.env.example` у `.env` і впишіть URL та publishable key (Settings → API Keys); назва змінної `RENDERER_VITE_SUPABASE_ANON_KEY` підтримує цей ключ і сумісний legacy anon key.
 4. Для релізів додайте ті самі значення в GitHub → Settings → Secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
 
 ### Вхід через Google (головний спосіб)
@@ -45,9 +53,11 @@ pnpm dev
 
 Як це працює: «Увійти через Google» відкриває ваш браузер; після вибору акаунта Google повертає на локальну адресу Kast (`127.0.0.1`, доступна лише з цього ПК й лише на час входу), і Kast обмінює одноразовий код на сесію (PKCE). Синхронізація вмикається сама.
 
-### Запасний вхід кодом з пошти
+### Запасний вхід кодом з пошти (потребує SMTP)
 
-Authentication → Email Templates → «Magic Link»: додайте в текст листа `{{ .Token }}` — Kast входить 6-значним кодом, без переходів у браузер.
+Для цього способу спочатку підключіть [власного SMTP-провайдера](https://supabase.com/docs/guides/auth/auth-smtp) в Supabase → Authentication → Email → SMTP Settings. Потім у Email Templates → «Magic Link» додайте `{{ .Token }}`: Kast приймає код із листа, без переходів у браузер.
+
+Нові Free-проєкти зі стандартною поштою Supabase [не дозволяють редагувати шаблони](https://supabase.com/changelog/46599-changes-to-email-template-customisation-on-free-tier). Стандартна пошта також надсилає листи лише учасникам команди проєкту й має жорсткі ліміти. Без власного SMTP та шаблону з кодом цей запасний спосіб не готовий до використання; для входу використовуйте Google.
 
 ## Оновлення
 

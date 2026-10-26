@@ -41,6 +41,8 @@ export interface Note extends Syncable {
   html?: string
   /** Усі сторінки нотатки (HTML); перша дублюється в html для старих версій */
   pages?: string[]
+  /** 1 — нотатка «Швидкі записи» (одна на акаунт; позначка синхронізується, тож другий ПК не створює дубль) */
+  quick?: 1
   pinned: 0 | 1
   createdAt: number
 }

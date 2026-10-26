@@ -31,8 +31,10 @@ const QUICK_KEY = 'quickNoteId'
 
 /** Швидкий запис у блокнот: дописує рядок у закріплену нотатку «Швидкі записи» */
 export async function appendToQuickNote(text: string) {
+  // Спершу локальна підказка, далі позначка quick — її приносить синхронізація з інших ПК
   const id = await getMeta<string | null>(QUICK_KEY, null)
-  const note = id ? await db.notes.get(id) : undefined
+  let note = id ? await db.notes.get(id) : undefined
+  if (!note || note.deleted) note = (await db.notes.toArray()).find((n) => n.quick && !n.deleted)
   const line = `${fmtTime(now())}  ${text.trim()}`
   if (note && !note.deleted) {
     // Форматований текст теж доповнюємо (на останній сторінці), щоб відкрита нотатка показала новий рядок
@@ -46,6 +48,6 @@ export async function appendToQuickNote(text: string) {
     await updateNote(note.id, patch)
     return
   }
-  const created = await createNote(`Швидкі записи\n${line}`, { pinned: 1 })
+  const created = await createNote(`Швидкі записи\n${line}`, { pinned: 1, quick: 1 })
   await setMeta(QUICK_KEY, created.id)
 }
