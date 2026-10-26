@@ -3,7 +3,8 @@
  * Кожна сторінка збирається однаково: PageHead (два рядки великими) → PageGrid (колонка 400px + основна).
  * Джерело токенів і правил — дизайн-система «Karkas Pulse» у конструкторі.
  */
-import { forwardRef, useEffect, useId, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react'
+import { forwardRef, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
 import { cn } from './utils'
 
@@ -143,7 +144,7 @@ export function RoundButton({
  */
 export function PageHead({ light, heavy, sub, actions }: { light: string; heavy: string; sub?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="mb-7 flex animate-fade-up items-start justify-between gap-5">
+    <div className="mb-7 flex animate-enter items-start justify-between gap-5">
       <div className="flex min-w-0 flex-col items-start gap-3.5">
         <h1 className="text-[clamp(44px,min(6vw,9vh),80px)] leading-[0.92] tracking-[-0.035em] uppercase">
           <span className="block font-light">{light}</span>
@@ -165,8 +166,11 @@ export function PageGrid({ side, main, fill }: { side: ReactNode; main: ReactNod
         fill && 'min-h-0 flex-1 items-stretch',
       )}
     >
-      <div className={cn('flex min-w-0 flex-col gap-3', fill && 'min-h-0')}>{side}</div>
-      <div className={cn('flex min-w-0 flex-col gap-3', fill && 'min-h-0')}>{main}</div>
+      <div className={cn('enter-stagger flex min-w-0 flex-col gap-3 [--enter-base:80ms]', fill && 'min-h-0')}>{side}</div>
+      {/* Перший список у колонці починається без верхнього відступу — рівно з полем ліворуч */}
+      <div className={cn('enter-stagger flex min-w-0 flex-col gap-3 [--enter-base:160ms] [&>section:first-child>h2]:mt-0', fill && 'min-h-0')}>
+        {main}
+      </div>
     </div>
   )
 }
@@ -244,7 +248,7 @@ const cardTone: Record<CardTone, string> = {
 
 export function Card({ tone = 'tile', className, children, style }: { tone?: CardTone; className?: string; children: ReactNode; style?: CSSProperties }) {
   return (
-    <section className={cn('relative animate-fade-up overflow-hidden rounded-card p-6', cardTone[tone], className)} style={style}>
+    <section className={cn('relative overflow-hidden rounded-card p-6', cardTone[tone], className)} style={style}>
       {children}
     </section>
   )
@@ -338,7 +342,7 @@ export function PulseRow({
   return (
     <div
       className={cn(
-        'group flex min-h-[60px] animate-row-in items-center gap-3.5 rounded-[30px] pr-4 pl-3.5 transition-colors duration-150',
+        'group row-enter flex min-h-[60px] items-center gap-3.5 rounded-[30px] pr-4 pl-3.5 transition-colors duration-150',
         selected ? 'bg-steel' : 'shadow-[inset_0_0_0_1px_var(--color-tile)] hover:bg-tile',
         onClick && 'cursor-pointer',
       )}
@@ -600,18 +604,63 @@ export function Glass({ children, className, tone = 'tile' }: { children: ReactN
 }
 
 /* ───────────── Стани ───────────── */
-/** Порожній стан Pulse: та сама плитка з іншим текстом */
-export function EmptyCard({ icon, title, text, children }: { icon: IconName; title: string; text?: ReactNode; children?: ReactNode }) {
+/**
+ * Інфо-рядок: тихий рядок заввишки з рядок задачі для стану, підсумку чи підказки.
+ * Стоїть у правій колонці над списками й замінює великі картки — сторінка не роздувається.
+ * progress малює під текстом штрих Pulse на частку шляху; праворуч — значення або одна дія.
+ */
+export function InfoRow({
+  icon,
+  title,
+  text,
+  children,
+  tone = 'quiet',
+  progress,
+  tip,
+}: {
+  icon: IconName
+  title: ReactNode
+  text?: ReactNode
+  children?: ReactNode
+  /** accent — зелена обвідка: стан, що чекає дії (наприклад, «Час закрити день») */
+  tone?: 'quiet' | 'accent'
+  progress?: number
+  tip?: string
+}) {
   return (
-    <div className="flex animate-fade-up flex-col items-center gap-6 rounded-tile bg-tile px-7 py-10 text-center">
-      <span className="grid size-16 place-items-center rounded-full bg-canvas text-grey">
-        <Icon name={icon} size={28} />
-      </span>
-      <div className="max-w-[520px]">
-        <h2 className="text-[28px] leading-[1.15] font-extrabold tracking-[-0.02em]">{title}</h2>
-        {text && <p className="mt-2.5 text-[16px] leading-normal font-medium text-grey">{text}</p>}
-      </div>
-      {children}
+    <div
+      data-tip={tip}
+      className={cn(
+        'relative flex min-h-[60px] shrink-0 items-center gap-3.5 overflow-hidden rounded-[30px] py-2 pr-2 pl-5',
+        tone === 'accent' ? 'shadow-[inset_0_0_0_1px_var(--color-growth)]' : 'shadow-[inset_0_0_0_1px_var(--color-tile)]',
+      )}
+    >
+      {progress !== undefined && progress > 0 && <Hatch value={progress} color="rgb(19 242 135 / 0.28)" />}
+      <Icon name={icon} size={18} className={cn('relative shrink-0', tone === 'accent' ? 'text-growth' : 'text-muted')} />
+      <p className="relative min-w-0 flex-1 truncate text-[15px] font-semibold text-muted">
+        <span className={tone === 'accent' ? 'text-growth' : 'text-white'}>{title}</span>
+        {text && <span> · {text}</span>}
+      </p>
+      {children && <div className="relative flex shrink-0 items-center gap-2 pr-2">{children}</div>}
+    </div>
+  )
+}
+
+/** Тиждень у мініатюрі для інфо-рядка: сім стовпчиків, висота — частка від найкращого дня */
+export function MiniWeek({ days }: { days: { label: string; count: number; today?: boolean }[] }) {
+  const max = Math.max(1, ...days.map((d) => d.count))
+  return (
+    <div className="flex h-7 gap-1" role="img" aria-label={days.map((d) => `${d.label} ${d.count}`).join(', ')}>
+      {days.map((d) => (
+        <span key={d.label} title={`${d.label}: ${d.count}`} className={cn('relative w-2 overflow-hidden rounded-full', d.today ? 'bg-steel' : 'bg-tile')}>
+          {d.count > 0 && (
+            <span
+              className={cn('absolute inset-x-0 bottom-0 rounded-full', d.today ? 'bg-growth' : 'bg-soft')}
+              style={{ height: `${30 + (d.count / max) * 70}%` }}
+            />
+          )}
+        </span>
+      ))}
     </div>
   )
 }
@@ -688,5 +737,135 @@ export function SettingRow({ title, text, children }: { title: string; text?: Re
       </div>
       {children && <div className="shrink-0">{children}</div>}
     </div>
+  )
+}
+
+/* ───────────── ContextMenu ───────────── */
+export interface MenuAction {
+  label: string
+  icon: IconName
+  onSelect: () => void
+  /** growth — особлива дія; danger — видалення (завжди останнім) */
+  tone?: 'default' | 'growth' | 'danger'
+  disabled?: boolean
+}
+
+/**
+ * Темне меню Pulse біля курсора: canvas, радіус 26, пункти 48px з іконкою 20px у круглому бейджі 34px.
+ * Закривається Esc, кліком поза ним, прокруткою чи втратою фокусу вікна. ↑ ↓ — пункти, Enter — дія.
+ */
+export function ContextMenu({
+  x,
+  y,
+  label,
+  header,
+  items,
+  onClose,
+}: {
+  x: number
+  y: number
+  label: string
+  header?: ReactNode
+  items: MenuAction[]
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ left: x, top: y })
+
+  // Тримаємо меню в межах вікна
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const { width, height } = el.getBoundingClientRect()
+    setPos({
+      left: Math.max(8, Math.min(x, innerWidth - width - 8)),
+      top: Math.max(8, y + height > innerHeight - 8 ? y - height : y),
+    })
+  }, [x, y])
+
+  useEffect(() => {
+    const down = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onClose()
+    }
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    const close = () => onClose()
+    // Прокрутка сторінки закриває меню; прокрутка всередині (список шрифтів) — ні
+    const scroll = (e: Event) => {
+      if (!ref.current?.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('pointerdown', down, true)
+    document.addEventListener('scroll', scroll, true)
+    document.addEventListener('keydown', key, true)
+    window.addEventListener('blur', close)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('pointerdown', down, true)
+      document.removeEventListener('scroll', scroll, true)
+      document.removeEventListener('keydown', key, true)
+      window.removeEventListener('blur', close)
+      window.removeEventListener('resize', close)
+    }
+  }, [onClose])
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    e.preventDefault()
+    const buttons = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>('[role=menuitem]:not(:disabled)') ?? [])
+    const i = buttons.indexOf(document.activeElement as HTMLButtonElement)
+    buttons[(i + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus()
+  }
+
+  return createPortal(
+    <div
+      ref={ref}
+      role="menu"
+      aria-label={label}
+      onKeyDown={onKeyDown}
+      // Кнопки меню не забирають виділення в редакторі
+      onMouseDown={(e) => {
+        if ((e.target as HTMLElement).closest('button')) e.preventDefault()
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+      className="fixed z-[130] flex w-[288px] origin-top-left animate-menu-in flex-col gap-0.5 rounded-[26px] bg-canvas p-1.5 text-white shadow-menu"
+      style={pos}
+    >
+      {header && <div className="mb-1 border-b border-tile px-1 pt-1 pb-2.5">{header}</div>}
+      {items.map((it) => (
+        <button
+          key={it.label}
+          role="menuitem"
+          disabled={it.disabled}
+          onClick={() => {
+            it.onSelect()
+          }}
+          className={cn(
+            'group flex h-12 items-center gap-3 rounded-[20px] pr-3.5 pl-1.5 text-left text-[15px] font-bold transition-colors duration-150 hover:bg-tile focus-visible:bg-tile focus-visible:outline-none disabled:opacity-40 disabled:hover:bg-transparent',
+            it.tone === 'growth' && 'text-growth',
+            it.tone === 'danger' && 'text-danger-text',
+          )}
+        >
+          {/* Іконка 20px у круглому бейджі 34px: колір бейджа повторює зміст дії */}
+          <span
+            className={cn(
+              'grid size-[34px] shrink-0 place-items-center rounded-full transition-colors duration-150',
+              it.tone === 'growth'
+                ? 'bg-growth text-ink'
+                : it.tone === 'danger'
+                  ? 'bg-behind/15 text-danger-text group-hover:bg-behind/25'
+                  : 'bg-tile text-white group-hover:bg-steel group-focus-visible:bg-steel',
+            )}
+          >
+            <Icon name={it.icon} size={20} />
+          </span>
+          {it.label}
+        </button>
+      ))}
+    </div>,
+    document.body,
   )
 }

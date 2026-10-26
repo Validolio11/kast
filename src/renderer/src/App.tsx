@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppHeader, RoundButton, SyncDot, ToastProvider, UpdatePill, WindowControls, type NavTab } from '@/design-system'
 import { useDay, useStatus, useToday } from '@/data/hooks'
-import { sweepStale } from '@/data/tasks'
+import { rolloverLeftovers, sweepStale } from '@/data/tasks'
 import { CloseDay } from '@/flows/CloseDay'
 import { Focus } from '@/flows/Focus'
 import { useDayKey, useHour, useSettings, useUpdateState } from '@/lib/hooks'
@@ -13,7 +13,7 @@ import { Settings } from '@/views/Settings'
 import { Today } from '@/views/Today'
 
 type Tab = 'today' | 'notebook' | 'inbox' | 'done'
-const TABS: Tab[] = ['today', 'notebook', 'inbox', 'done']
+const TABS: Tab[] = ['today', 'inbox', 'done', 'notebook']
 
 export default function App() {
   return (
@@ -46,6 +46,11 @@ function Shell() {
     window.kast.window.isMaximized().then(setMaximized)
     return window.kast.window.onMaximized(setMaximized)
   }, [])
+
+  // Новий день (при старті й опівночі): незакрите з минулих днів повертається у Вхідні
+  useEffect(() => {
+    rolloverLeftovers(date)
+  }, [date])
 
   // Тихе старіння Вхідних: при старті й щогодини
   useEffect(() => {
@@ -98,9 +103,9 @@ function Shell() {
 
   const tabs: NavTab<Tab>[] = [
     { id: 'today', label: 'Сьогодні', count: today ? today.main.length + today.small.length : 0, tip: 'Ctrl + 1' },
-    { id: 'notebook', label: 'Блокнот', tip: 'Ctrl + 2' },
-    { id: 'inbox', label: 'Вхідні', count: inbox?.length, tip: 'Ctrl + 3' },
-    { id: 'done', label: 'Готово', tip: 'Ctrl + 4' },
+    { id: 'inbox', label: 'Вхідні', count: inbox?.length, tip: 'Ctrl + 2' },
+    { id: 'done', label: 'Готово', tip: 'Ctrl + 3' },
+    { id: 'notebook', label: 'Блокнот', tip: 'Ctrl + 4' },
   ]
 
   const onOpen = (id: string) => setFocusId(id)

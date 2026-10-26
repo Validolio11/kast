@@ -34,8 +34,10 @@ interface Remote {
 interface Snapshot {
   state: SyncState
   email: string | null
+  name: string | null
+  avatar: string | null
 }
-let snap: Snapshot = { state: 'local', email: null }
+let snap: Snapshot = { state: 'local', email: null, name: null, avatar: null }
 const listeners = new Set<() => void>()
 function setSnap(patch: Partial<Snapshot>) {
   snap = { ...snap, ...patch }
@@ -167,8 +169,9 @@ async function onSession(s: Session | null) {
   session = s
   channel?.unsubscribe()
   channel = null
-  if (!s) return setSnap({ state: 'local', email: null })
-  setSnap({ email: s.user.email ?? null })
+  if (!s) return setSnap({ state: 'local', email: null, name: null, avatar: null })
+  const meta = s.user.user_metadata ?? {}
+  setSnap({ email: s.user.email ?? null, name: meta.full_name ?? meta.name ?? null, avatar: meta.avatar_url ?? meta.picture ?? null })
   await adoptUser(s.user.id)
   channel = supabase!
     .channel('records')
@@ -199,6 +202,25 @@ export function startSync() {
 }
 
 /* ───────── Вхід кодом з пошти ───────── */
+
+/**
+ * Вхід через Google: Supabase дає адресу сторінки Google, main відкриває її в браузері
+ * й чекає повернення на 127.0.0.1, далі одноразовий код обмінюємо на сесію (PKCE).
+ */
+export async function signInWithGoogle() {
+  const redirectTo = await window.kast.auth.prepare()
+  const { data, error } = await supabase!.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo, skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } },
+  })
+  if (error) throw error
+  const result = await window.kast.auth.open(data.url)
+  if (result.error !== undefined) throw new Error(result.error)
+  const { error: exchange } = await supabase!.auth.exchangeCodeForSession(result.code)
+  if (exchange) throw exchange
+}
+
+export const cancelGoogle = () => window.kast?.auth.cancel()
 
 export async function sendCode(email: string) {
   const { error } = await supabase!.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })

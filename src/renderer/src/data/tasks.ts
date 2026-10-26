@@ -94,11 +94,21 @@ export async function setKind(id: string, kind: TaskKind): Promise<boolean> {
   return true
 }
 
-export async function complete(id: string, done: boolean) {
+/**
+ * Галочка. Виконана задача рахується в сьогоднішньому прогресі, звідки б її не взяли (Вхідні, Колись).
+ * Зняття галочки повертає задачу на сьогодні в межах ліміту, а якщо день повний — у Вхідні.
+ */
+export async function complete(id: string, done: boolean): Promise<Placement | undefined> {
   const t = await db.tasks.get(id)
   if (!t) return
-  if (done) await update(id, { status: 'done', doneAt: now() })
-  else await update(id, { status: 'today', doneAt: null, planDate: dayKey() })
+  if (done) {
+    await update(id, { status: 'done', doneAt: now(), planDate: dayKey() })
+    return
+  }
+  const p = await placement(dayKey(), t.kind)
+  if (p === 'inbox') await update(id, { status: 'inbox', doneAt: null, planDate: null, inboxAt: now() })
+  else await update(id, { status: 'today', kind: p, doneAt: null, planDate: dayKey() })
+  return p
 }
 
 export const toInbox = (id: string) => update(id, { status: 'inbox', planDate: null, inboxAt: now(), staleAt: null })
@@ -116,15 +126,37 @@ async function patchDay(date: string, patch: Partial<Day>) {
 
 export const markPlanned = () => patchDay(dayKey(), { plannedAt: now() })
 
+/**
+ * Новий день: незакриті задачі з минулих днів не зникають у нікуди, а повертаються у Вхідні.
+ * Стара planDate лишається позначкою «не завершено раніше» — за нею їх показує «План на день».
+ */
+export async function rolloverLeftovers(date = dayKey()) {
+  const stale = (await db.tasks.where('planDate').below(date).toArray()).filter((t) => !t.deleted && t.status === 'today')
+  for (const t of stale) await update(t.id, { status: 'inbox', inboxAt: now(), staleAt: null })
+  return stale.length
+}
+
 export type CloseChoice = 'tomorrow' | 'inbox' | 'letgo'
 
 export async function closeDay(choices: Record<string, CloseChoice>, tomorrowNote: string) {
   const today = dayKey()
   const tomorrow = addDays(today, 1)
   await db.transaction('rw', db.tasks, db.days, async () => {
+    // Завтра теж діє ліміт 3 + 5: що не влазить — у Вхідні, а не понад межу
+    const planned = await todayTasks(tomorrow)
+    let main = planned.filter((t) => t.kind === 'main').length
+    let small = planned.length - main
     for (const [id, c] of Object.entries(choices)) {
-      if (c === 'tomorrow') await update(id, { planDate: tomorrow, order: now() })
-      else if (c === 'inbox') await toInbox(id)
+      if (c === 'tomorrow') {
+        const t = await db.tasks.get(id)
+        const kind = t?.kind === 'main' && main < MAIN_LIMIT ? 'main' : small < SMALL_LIMIT ? 'small' : main < MAIN_LIMIT ? 'main' : null
+        if (!kind) await toInbox(id)
+        else {
+          if (kind === 'main') main++
+          else small++
+          await update(id, { planDate: tomorrow, kind, order: now() })
+        }
+      } else if (c === 'inbox') await toInbox(id)
       else await letGo(id)
     }
     // Записати те, що крутиться в голові: кожен рядок — окрема задача у Вхідних

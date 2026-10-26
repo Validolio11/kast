@@ -23,6 +23,11 @@ const api: KastApi = {
   },
   notify: (title, body, target) => ipcRenderer.send('notify', title, body, target),
   onNavigate: (cb) => listen<NavTarget>('navigate', cb),
+  auth: {
+    prepare: () => ipcRenderer.invoke('auth:prepare'),
+    open: (url) => ipcRenderer.invoke('auth:open', url),
+    cancel: () => ipcRenderer.send('auth:cancel'),
+  },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
     toggleMaximize: () => ipcRenderer.send('window:toggleMaximize'),

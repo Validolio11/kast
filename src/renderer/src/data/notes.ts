@@ -1,6 +1,6 @@
 import { fmtTime, now } from '@/lib/time'
 import { db, getMeta, setMeta, type Note } from './db'
-import { captureToInbox, touch } from './tasks'
+import { touch } from './tasks'
 
 /** Рядок, що починається з «[]» або «- [ ]», — це задача */
 export const TASK_LINE = /^\s*(?:-\s*)?\[\s?\]\s*/
@@ -27,23 +27,6 @@ export async function createNote(body = '', patch: Partial<Note> = {}) {
 export const updateNote = (id: string, patch: Partial<Note>) => db.notes.update(id, touch(patch))
 export const removeNote = (id: string) => updateNote(id, { deleted: 1 })
 
-/**
- * Перетворює рядок нотатки на задачу у Вхідних.
- * Повертає новий текст нотатки (рядок позначено «↗»), або null, якщо рядок порожній чи вже відправлений.
- */
-export async function lineToTask(noteId: string, body: string, lineIndex: number): Promise<string | null> {
-  const lines = body.split('\n')
-  const raw = lines[lineIndex] ?? ''
-  if (raw.startsWith(SENT_MARK)) return null
-  const title = raw.replace(TASK_LINE, '').replace(/^[-•*]\s+/, '').trim()
-  if (!title) return null
-  await captureToInbox(title, { sourceNoteId: noteId })
-  lines[lineIndex] = SENT_MARK + title
-  const next = lines.join('\n')
-  await updateNote(noteId, { body: next })
-  return next
-}
-
 const QUICK_KEY = 'quickNoteId'
 
 /** Швидкий запис у блокнот: дописує рядок у закріплену нотатку «Швидкі записи» */
@@ -52,7 +35,15 @@ export async function appendToQuickNote(text: string) {
   const note = id ? await db.notes.get(id) : undefined
   const line = `${fmtTime(now())}  ${text.trim()}`
   if (note && !note.deleted) {
-    await updateNote(note.id, { body: `${note.body.trimEnd()}\n${line}` })
+    // Форматований текст теж доповнюємо (на останній сторінці), щоб відкрита нотатка показала новий рядок
+    const row = `<div>${line.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</div>`
+    const patch: Partial<Note> = { body: `${note.body.trimEnd()}\n${line}` }
+    if (note.pages?.length) {
+      const pages = [...note.pages]
+      pages[pages.length - 1] += row
+      Object.assign(patch, { pages, html: pages[0] })
+    } else if (note.html !== undefined) patch.html = note.html + row
+    await updateNote(note.id, patch)
     return
   }
   const created = await createNote(`Швидкі записи\n${line}`, { pinned: 1 })

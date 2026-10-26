@@ -21,12 +21,12 @@ export function useToday(date: string) {
   }, [date])
 }
 
-/** Заплановані на минулі дні й не закриті */
+/** Повернені у Вхідні незавершені з минулих днів (стара planDate — позначка) */
 export function useLeftovers(date: string) {
   return useLiveQuery(
     async () =>
       alive(await db.tasks.where('planDate').below(date).toArray())
-        .filter((t) => t.status === 'today')
+        .filter((t) => t.status === 'inbox')
         .sort((a, b) => a.order - b.order),
     [date],
   )
@@ -47,7 +47,8 @@ export function useTask(id: string | null) {
 }
 
 export function useDay(date: string = dayKey()) {
-  return useLiveQuery(() => db.days.get(date), [date])
+  // null — запису про день ще немає (його не планували й не закривали); undefined — ще завантажується
+  return useLiveQuery(async () => (await db.days.get(date)) ?? null, [date])
 }
 
 export function useNotes() {

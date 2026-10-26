@@ -35,7 +35,12 @@ export interface Task extends Syncable {
 
 export interface Note extends Syncable {
   id: string
+  /** Простий текст: заголовок — перший рядок; для пошуку й синхронізації */
   body: string
+  /** Форматований текст першої сторінки (шрифти, нумерація, кнопки копіювання) */
+  html?: string
+  /** Усі сторінки нотатки (HTML); перша дублюється в html для старих версій */
+  pages?: string[]
   pinned: 0 | 1
   createdAt: number
 }

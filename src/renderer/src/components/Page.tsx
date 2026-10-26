@@ -1,5 +1,15 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { cn, PageGrid, PageHead } from '@/design-system'
+
+/** Перша секунда після відкриття вкладки: блоки з'являються разом, рядки окремо не анімуються */
+export function useEntering() {
+  const [entering, setEntering] = useState(true)
+  useEffect(() => {
+    const t = setTimeout(() => setEntering(false), 1100)
+    return () => clearTimeout(t)
+  }, [])
+  return entering ? '' : undefined
+}
 
 /**
  * Єдиний скелет вкладки Pulse: великий заголовок у два рядки → колонка 400px + основна.
@@ -23,8 +33,11 @@ export function Page({
   /** Основна колонка займає всю висоту вікна (Блокнот); на вузькому вікні — звичайна прокрутка */
   fill?: boolean
 }) {
+  const entering = useEntering()
   return (
-    <div className={cn('h-full overflow-y-auto', fill && 'min-[1040px]:flex min-[1040px]:flex-col min-[1040px]:overflow-hidden')}>
+    <div
+      data-entering={entering}
+      className={cn('h-full overflow-y-auto', fill && 'min-[1040px]:flex min-[1040px]:flex-col min-[1040px]:overflow-hidden')}>
       <div
         className={cn(
           'mx-auto flex w-full max-w-[1280px] flex-col px-8 pt-6 pb-16 max-[640px]:px-4',

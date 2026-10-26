@@ -34,15 +34,26 @@ pnpm dev
 
 1. Створіть проєкт на [supabase.com](https://supabase.com).
 2. SQL Editor → виконайте `supabase/schema.sql`.
-3. Authentication → Email Templates → «Magic Link»: додайте в текст листа `{{ .Token }}` — Kast входить 6-значним кодом, без переходів у браузер.
-4. Скопіюйте `.env.example` у `.env` і впишіть URL та anon key (Settings → API).
-5. Для релізів додайте ті самі значення в GitHub → Settings → Secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
+3. Скопіюйте `.env.example` у `.env` і впишіть URL та anon key (Settings → API).
+4. Для релізів додайте ті самі значення в GitHub → Settings → Secrets: `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
+
+### Вхід через Google (головний спосіб)
+
+1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → Create credentials → OAuth client ID → тип **Web application**. В Authorized redirect URIs додайте `https://<ваш-проєкт>.supabase.co/auth/v1/callback`.
+2. Supabase → Authentication → Sign In / Providers → **Google**: увімкніть і вставте Client ID та Client Secret.
+3. Supabase → Authentication → URL Configuration → **Redirect URLs**: додайте `http://127.0.0.1:53682/auth/callback`, `http://127.0.0.1:53683/auth/callback`, `http://127.0.0.1:53684/auth/callback`.
+
+Як це працює: «Увійти через Google» відкриває ваш браузер; після вибору акаунта Google повертає на локальну адресу Kast (`127.0.0.1`, доступна лише з цього ПК й лише на час входу), і Kast обмінює одноразовий код на сесію (PKCE). Синхронізація вмикається сама.
+
+### Запасний вхід кодом з пошти
+
+Authentication → Email Templates → «Magic Link»: додайте в текст листа `{{ .Token }}` — Kast входить 6-значним кодом, без переходів у браузер.
 
 ## Оновлення
 
 Kast перевіряє GitHub Releases при старті й кожні 4 години, тихо завантажує нову версію і показує «Оновлення готове · Перезапустити». Якщо проігнорувати — встановиться при закритті.
 
-Один раз: створіть **публічний** репозиторій `kast` і впишіть свій логін у `electron-builder.yml` → `publish.owner`.
+Один раз: створіть **публічний** репозиторій `Validolio11/kast` (логін уже вписано в `electron-builder.yml` → `publish.owner`).
 
 Кожен реліз:
 

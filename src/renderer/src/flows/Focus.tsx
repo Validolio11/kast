@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button, Card, cn, Icon, PageGrid, PulseChip, RoundButton, SegTabs, useToast } from '@/design-system'
 import { WHEN_OPTIONS } from '@/components/TaskRow'
+import { useEntering } from '@/components/Page'
 import { useTask } from '@/data/hooks'
 import { complete, remove, setKind, takeToToday, toInbox, update } from '@/data/tasks'
 import type { Task, TaskKind, TaskStatus, When } from '@/data/db'
@@ -17,6 +18,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = { today: 'Сьогодні', in
 export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
   const task = useTask(id)
   const toast = useToast()
+  const entering = useEntering()
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -37,7 +39,8 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
   const done = task.status === 'done'
 
   const finish = async () => {
-    await complete(task.id, !done)
+    const p = await complete(task.id, !done)
+    if (done && p === 'inbox') toast({ kind: 'info', title: 'День уже повний — задачу повернуто у Вхідні' })
     if (!done) {
       toast({ title: 'Зроблено', text: task.title })
       onClose()
@@ -45,9 +48,9 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
   }
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div data-entering={entering} className="h-full overflow-y-auto">
       <div className="mx-auto flex w-full max-w-[1280px] flex-col px-8 pt-6 pb-16 max-[640px]:px-4">
-        <div className="mb-7 flex animate-fade-up items-start gap-5">
+        <div className="mb-7 flex animate-enter items-start gap-5">
           <RoundButton icon="chevronLeft" size={56} label="Назад · Esc" onClick={onClose} />
           <div className="flex min-w-0 flex-1 flex-col gap-3.5">
             <PulseChip tone={isToday ? 'growth' : 'steel'} className="self-start">
@@ -101,7 +104,7 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
                   <Button variant={done ? 'steel' : 'pulse'} size="lg" iconLeft={done ? 'undo' : 'check'} onClick={finish}>
                     {done ? 'Повернути в роботу' : 'Готово'}
                   </Button>
-                  {(isToday || task.status === 'someday') && (
+                  {(isToday || task.status === 'someday' || task.status === 'dropped') && (
                     <Button variant="steel" size="lg" onClick={() => toInbox(task.id).then(onClose)}>
                       У Вхідні
                     </Button>
@@ -133,7 +136,7 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
                 />
                 <p className="px-1 text-[13px] font-semibold text-muted">Розмите відкладається, конкретне — робиться.</p>
               </Card>
-              <section className="flex min-h-[320px] animate-fade-up flex-col rounded-panel bg-paper p-8 text-ink">
+              <section className="flex min-h-[320px] flex-col rounded-panel bg-paper p-8 text-ink">
                 <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">Нотатки</h2>
                 <Field
                   value={task.notes}
@@ -177,6 +180,16 @@ function Field({
   const [v, setV] = useState(value)
   useEffect(() => setV(value), [value])
   const save = () => v !== value && onSave(v)
+  // Вихід через Esc чи гарячу клавішу не викликає blur — зберігаємо незбережене при закритті
+  const latest = useRef({ v, value, onSave })
+  latest.current = { v, value, onSave }
+  useEffect(
+    () => () => {
+      const { v: cur, value: saved, onSave: persist } = latest.current
+      if (cur !== saved) persist(cur)
+    },
+    [],
+  )
   const cls = cn('w-full bg-transparent caret-growth outline-none', className)
   if (multiline) return <textarea value={v} onChange={(e) => setV(e.target.value)} onBlur={save} placeholder={placeholder} className={cn(cls, 'resize-none')} />
   return (
@@ -193,40 +206,63 @@ function Field({
 
 const PRESETS = [15, 25, 45]
 
+/**
+ * Таймери живуть поза компонентом: вийшли з Фокусу — відлік триває, повернулися — бачите залишок,
+ * а сповіщення «Час вийшов» прийде навіть з іншої вкладки.
+ */
+interface TimerState {
+  minutes: number
+  /** Коли закінчиться (якщо йде) */
+  endAt: number | null
+  /** Скільки лишилося секунд (якщо на паузі) */
+  left: number
+  alarm?: ReturnType<typeof setTimeout>
+}
+const timers = new Map<string, TimerState>()
+
+function timerOf(id: string): TimerState {
+  return timers.get(id) ?? { minutes: 25, endAt: null, left: 25 * 60 }
+}
+const secondsLeft = (t: TimerState) => (t.endAt ? Math.max(0, Math.round((t.endAt - Date.now()) / 1000)) : t.left)
+
 /** Таймбокс на панелі data: цифра — герой, пресет, старт, пауза */
 function Timer({ task }: { task: Task }) {
-  const [minutes, setMinutes] = useState(25)
-  const [left, setLeft] = useState(25 * 60)
-  const [running, setRunning] = useState(false)
-  const endAt = useRef(0)
+  const [state, setState] = useState(() => timerOf(task.id))
+  const [, tick] = useState(0)
+  const running = state.endAt !== null
+  const left = secondsLeft(state)
+  const minutes = state.minutes
+
+  const save = (next: TimerState) => {
+    clearTimeout(timerOf(task.id).alarm)
+    if (next.endAt) {
+      const title = task.title
+      next.alarm = setTimeout(() => {
+        timers.set(task.id, { minutes: next.minutes, endAt: null, left: 0 })
+        window.kast?.notify('Час вийшов', `${title} — зробіть паузу або позначте як готово.`)
+      }, next.endAt - Date.now())
+    }
+    timers.set(task.id, next)
+    setState(next)
+  }
 
   useEffect(() => {
     if (!running) return
     const t = setInterval(() => {
-      const s = Math.max(0, Math.round((endAt.current - Date.now()) / 1000))
-      setLeft(s)
-      if (s === 0) {
-        setRunning(false)
-        window.kast?.notify('Час вийшов', `${task.title} — зробіть паузу або позначте як готово.`)
-      }
+      tick((n) => n + 1)
+      if (secondsLeft(timerOf(task.id)) === 0) setState(timerOf(task.id))
     }, 250)
     return () => clearInterval(t)
-  }, [running, task.title])
+  }, [running, task.id])
 
-  const start = () => {
-    endAt.current = Date.now() + left * 1000
-    setRunning(true)
-  }
-  const pick = (m: number) => {
-    setMinutes(m)
-    setLeft(m * 60)
-    setRunning(false)
-  }
+  const start = () => save({ minutes, endAt: Date.now() + (left || minutes * 60) * 1000, left: 0 })
+  const pause = () => save({ minutes, endAt: null, left })
+  const pick = (m: number) => save({ minutes: m, endAt: null, left: m * 60 })
   const mm = String(Math.floor(left / 60)).padStart(2, '0')
   const ss = String(left % 60).padStart(2, '0')
 
   return (
-    <section className="flex animate-fade-up flex-col gap-5 rounded-tile bg-data p-7 text-white">
+    <section className="flex flex-col gap-5 rounded-tile bg-data p-7 text-white">
       <div className="flex items-center justify-between gap-3">
         <span className="text-[14px] font-bold text-white/80">{running ? 'Йде фокус' : 'Таймбокс'}</span>
         <div className="flex gap-1 rounded-full bg-canvas/25 p-1">
@@ -258,7 +294,7 @@ function Timer({ task }: { task: Task }) {
             </button>
           )}
           <button
-            onClick={() => (running ? setRunning(false) : start())}
+            onClick={() => (running ? pause() : start())}
             aria-label={running ? 'Пауза' : 'Почати'}
             className="grid size-14 place-items-center rounded-full bg-paper text-ink transition hover:scale-105 active:scale-95"
           >

@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import type { AppInfo, NavTarget, Settings } from '../shared/types'
 import * as settings from './settings'
 import { setupUpdater } from './updater'
+import { cancelOAuth, openOAuth, prepareOAuth } from './auth'
 
 const DEV_URL = process.env.ELECTRON_RENDERER_URL
 const RENDERER_DIR = join(__dirname, '../renderer')
@@ -63,9 +64,14 @@ function createMain() {
     if (!startHidden) main?.show()
   })
 
+  // Розмір і місце пишемо один раз, коли перетягування стихло, а не на кожен піксель руху
+  let boundsTimer: ReturnType<typeof setTimeout> | undefined
   const saveBounds = () => {
-    if (!main || main.isMinimized()) return
-    settings.save({ bounds: { ...main.getNormalBounds(), maximized: main.isMaximized() } })
+    clearTimeout(boundsTimer)
+    boundsTimer = setTimeout(() => {
+      if (!main || main.isDestroyed() || main.isMinimized()) return
+      settings.save({ bounds: { ...main.getNormalBounds(), maximized: main.isMaximized() } })
+    }, 400)
   }
   main.on('resize', saveBounds)
   main.on('move', saveBounds)
@@ -203,6 +209,9 @@ function setupIpc() {
   })
   ipcMain.on('notify', (_e, title: string, body: string, target?: NavTarget) => notify(title, body, target))
   ipcMain.on('capture:hide', () => capture?.hide())
+  ipcMain.handle('auth:prepare', () => prepareOAuth())
+  ipcMain.handle('auth:open', (_e, url: string) => openOAuth(url, () => showMain()))
+  ipcMain.on('auth:cancel', () => cancelOAuth())
   ipcMain.on('window:minimize', () => main?.minimize())
   ipcMain.on('window:toggleMaximize', () => (main?.isMaximized() ? main.unmaximize() : main?.maximize()))
   ipcMain.on('window:close', () => main?.close())

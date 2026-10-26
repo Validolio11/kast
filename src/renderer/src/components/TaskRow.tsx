@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { CheckCircle, CycleChip, PulseRow, type ChipOption } from '@/design-system'
+import { CheckCircle, CycleChip, PulseRow, useToast, type ChipOption } from '@/design-system'
 import type { Task, When } from '@/data/db'
 import { complete, update } from '@/data/tasks'
 
@@ -26,9 +26,15 @@ export function TaskRow({
   muted?: boolean
 }) {
   const done = task.status === 'done'
+  const toast = useToast()
+  const toggle = async (v: boolean) => {
+    const p = await complete(task.id, v)
+    if (p === 'inbox') toast({ kind: 'info', title: 'День уже повний — задачу повернуто у Вхідні' })
+    else if (p) toast({ title: 'Повернуто на сьогодні' })
+  }
   return (
     <PulseRow
-      leading={<CheckCircle checked={done} onChange={(v) => complete(task.id, v)} label={`Виконано: ${task.title}`} />}
+      leading={<CheckCircle checked={done} onChange={toggle} label={`Виконано: ${task.title}`} />}
       title={task.title}
       sub={task.firstStep && !done ? `Перший крок: ${task.firstStep}` : undefined}
       done={done}

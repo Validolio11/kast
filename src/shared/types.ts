@@ -21,6 +21,9 @@ export interface AppInfo {
   nowOffset: number
 }
 
+/** Результат входу через Google: одноразовий код або причина невдачі */
+export type OAuthResult = { code: string; error?: undefined } | { code?: undefined; error: string }
+
 export type NavTarget = 'today' | 'notebook' | 'inbox' | 'done' | 'close-day' | 'settings'
 
 export interface KastApi {
@@ -37,6 +40,13 @@ export interface KastApi {
   }
   notify(title: string, body: string, target?: NavTarget): void
   onNavigate(cb: (t: NavTarget) => void): () => void
+  auth: {
+    /** Локальна адреса, куди Google поверне після входу */
+    prepare(): Promise<string>
+    /** Відкриває сторінку входу в браузері й чекає повернення */
+    open(url: string): Promise<OAuthResult>
+    cancel(): void
+  }
   window: {
     minimize(): void
     toggleMaximize(): void

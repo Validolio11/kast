@@ -27,6 +27,6 @@ nsis:
   deleteAppDataOnUninstall: false
 publish:
   provider: github
-  owner: OWNER
+  owner: Validolio11
   repo: kast
   releaseType: release

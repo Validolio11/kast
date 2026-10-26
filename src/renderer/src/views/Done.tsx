@@ -1,19 +1,22 @@
 import { useState } from 'react'
-import { CaptureField, Card, EmptyCard, ListSection, WeekStrip } from '@/design-system'
+import { CaptureField, InfoRow, ListSection, MiniWeek, RowAction } from '@/design-system'
 import { Page } from '@/components/Page'
 import { TaskRow } from '@/components/TaskRow'
-import { useDone } from '@/data/hooks'
+import { useDone, useStatus } from '@/data/hooks'
+import { toInbox } from '@/data/tasks'
 import { dayKey, fmtShortDay, fmtTime, fmtWeekday, nowDate, plural, weekStart } from '@/lib/time'
 
 export function Done({ captureRef, onOpen }: { captureRef: React.RefObject<HTMLInputElement | null>; onOpen: (id: string) => void }) {
   const [query, setQuery] = useState('')
   const loaded = useDone()
+  const dropped = useStatus('dropped') ?? []
   const done = loaded ?? []
 
   const today = dayKey()
   const monday = weekStart()
   const q = query.trim().toLowerCase()
   const list = q ? done.filter((t) => t.title.toLowerCase().includes(q)) : done
+  const shownDropped = q ? dropped.filter((t) => t.title.toLowerCase().includes(q)) : dropped
   const keyOf = (ts: number | null) => dayKey(new Date(ts ?? 0))
 
   const week = Array.from({ length: 7 }, (_, i) => {
@@ -27,7 +30,6 @@ export function Done({ captureRef, onOpen }: { captureRef: React.RefObject<HTMLI
   const todays = list.filter((t) => keyOf(t.doneAt) === today)
   const thisWeek = list.filter((t) => keyOf(t.doneAt) !== today && (t.doneAt ?? 0) >= monday.getTime())
   const earlier = list.filter((t) => (t.doneAt ?? 0) < monday.getTime()).slice(0, 100)
-  const firstGroup = todays.length ? 'today' : thisWeek.length ? 'week' : 'earlier'
 
   return (
     <Page
@@ -46,44 +48,59 @@ export function Done({ captureRef, onOpen }: { captureRef: React.RefObject<HTMLI
             placeholder="Пошук у зробленому"
             autoFocus
           />
-          <Card className="flex flex-col gap-5 p-6">
-            <div className="flex items-end justify-between gap-3 px-1">
-              <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">Цей тиждень</h2>
-              <span className="text-[14px] font-bold text-grey">{plural(weekTotal, ['справа', 'справи', 'справ'])}</span>
-            </div>
-            <WeekStrip days={week} />
-          </Card>
+          {!q && (
+            <InfoRow icon="calendar" title="Цей тиждень" text={plural(weekTotal, ['справа', 'справи', 'справ'])}>
+              <MiniWeek days={week} />
+            </InfoRow>
+          )}
+          {loaded && list.length === 0 && (
+            <InfoRow
+              icon={q ? 'search' : 'check'}
+              title={q ? 'Нічого не знайдено' : 'Ще нічого не зроблено'}
+              tip={q ? undefined : 'Кожна галочка з’явиться тут'}
+            />
+          )}
         </>
       }
       main={
         <>
           {todays.length > 0 && (
-            <ListSection title="Сьогодні" count={todays.length} first>
+            <ListSection title="Сьогодні" count={todays.length}>
               {todays.map((t) => (
                 <TaskRow key={t.id} task={t} onOpen={onOpen} meta={<span className="tabular-nums">{fmtTime(t.doneAt!)}</span>} />
               ))}
             </ListSection>
           )}
           {thisWeek.length > 0 && (
-            <ListSection title="Цей тиждень" count={thisWeek.length} first={firstGroup === 'week'}>
+            <ListSection title="Цей тиждень" count={thisWeek.length}>
               {thisWeek.map((t) => (
                 <TaskRow key={t.id} task={t} onOpen={onOpen} meta={fmtWeekday(new Date(t.doneAt!))} />
               ))}
             </ListSection>
           )}
           {earlier.length > 0 && (
-            <ListSection title="Раніше" count={earlier.length} collapsible defaultOpen={!!q} first={firstGroup === 'earlier'}>
+            <ListSection title="Раніше" count={earlier.length} collapsible defaultOpen={!!q}>
               {earlier.map((t) => (
                 <TaskRow key={t.id} task={t} onOpen={onOpen} meta={fmtShortDay(t.doneAt!)} />
               ))}
             </ListSection>
           )}
-          {loaded && list.length === 0 && (
-            <EmptyCard
-              icon={q ? 'search' : 'check'}
-              title={q ? 'Нічого не знайдено' : 'Тут збиратиметься зроблене'}
-              text={q ? undefined : 'Кожна галочка лишається тут. Наприкінці тижня приємно подивитися, скільки всього позаду.'}
-            />
+          {/* Відпущене при закритті дня: без провини, але не безповоротно */}
+          {shownDropped.length > 0 && (
+            <ListSection title="Відпущено" count={shownDropped.length} collapsible defaultOpen={false}>
+              {[...shownDropped]
+                .sort((a, b) => b.updatedAt - a.updatedAt)
+                .map((t) => (
+                  <TaskRow
+                    key={t.id}
+                    task={t}
+                    onOpen={onOpen}
+                    muted
+                    meta={fmtShortDay(t.updatedAt)}
+                    actions={<RowAction icon="inbox" label="Повернути у Вхідні" onClick={() => toInbox(t.id)} />}
+                  />
+                ))}
+            </ListSection>
           )}
         </>
       }

@@ -79,7 +79,8 @@
   --animate-hatch: hatch 1.2s linear infinite;
   --animate-spin-slow: kp-spin 0.8s linear infinite;
   --animate-float: float 5s ease-in-out infinite;
-  --animate-row-in: row-in 260ms var(--ease-pulse) both;
+  /* Єдиний рух появи Pulse: знизу на 16px за 0,6 с */
+  --animate-enter: enter 600ms var(--ease-pulse) backwards;
   --animate-hatch-fill: hatch-fill 1.6s cubic-bezier(0.4, 0, 0.2, 1) 0.3s backwards;
   --animate-check-pop: check-pop 420ms var(--ease-spring) both;
 
@@ -140,8 +141,8 @@
     from { clip-path: inset(0 100% 0 0); }
     to { clip-path: inset(0 0 0 0); }
   }
-  @keyframes row-in {
-    from { opacity: 0; transform: translateY(6px); }
+  @keyframes enter {
+    from { opacity: 0; transform: translateY(16px); }
     to { opacity: 1; transform: translateY(0); }
   }
   @keyframes check-pop {
@@ -221,6 +222,75 @@
 }
 
 @layer components {
+  /* Редактор нотатки на paper: виділення зеленим, як у Karkas; «кнопка копіювання» — темний чип */
+  .note-editor {
+    position: relative;
+  }
+  .note-editor[data-empty]::before {
+    content: attr(data-placeholder);
+    position: absolute;
+    white-space: pre-line;
+    color: var(--color-dim);
+    pointer-events: none;
+  }
+  .note-editor ::selection {
+    background: var(--color-growth);
+    color: var(--color-ink);
+  }
+  .note-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    height: 40px;
+    margin: 2px;
+    padding: 0 5px 0 16px;
+    border-radius: 20px;
+    background: var(--color-canvas);
+    color: var(--color-white);
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1;
+    vertical-align: middle;
+    cursor: default;
+    user-select: none;
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  }
+  .note-chip-copy {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 15px;
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
+  .note-chip.is-copied {
+    background: var(--color-growth);
+    color: var(--color-ink);
+    transform: scale(1.06);
+  }
+
+  /*
+   * Поява сторінки однакова на всіх вкладках: заголовок, потім блоки колонок по черзі з кроком 80 мс.
+   * Ліва колонка стартує за 80 мс після заголовка, права — за 160 мс.
+   */
+  .enter-stagger > * {
+    animation: var(--animate-enter);
+    animation-delay: calc(var(--enter-base, 0ms) + var(--i, 0) * 80ms);
+  }
+  .enter-stagger > :nth-child(2) { --i: 1; }
+  .enter-stagger > :nth-child(3) { --i: 2; }
+  .enter-stagger > :nth-child(4) { --i: 3; }
+  .enter-stagger > :nth-child(5) { --i: 4; }
+  .enter-stagger > :nth-child(n + 6) { --i: 5; }
+  /* Рядок, доданий пізніше (нова задача), з'являється тим самим рухом; під час появи сторінки — ні, його несе секція */
+  .row-enter {
+    animation: var(--animate-enter);
+  }
+  [data-entering] .row-enter {
+    animation: none;
+  }
+
   /* Підказка при наведенні замість підписів на кнопках (правило Pulse) */
   [data-tip] {
     position: relative;

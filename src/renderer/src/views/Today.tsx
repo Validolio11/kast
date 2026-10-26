@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, CaptureField, Card, EmptyCard, Glass, Hatch, ListSection, PulseChip, PulseRow, RowAction, useToast } from '@/design-system'
+import { Button, CaptureField, Card, Icon, InfoRow, ListSection, PulseChip, PulseRow, RowAction, useToast } from '@/design-system'
 import { TaskRow, WHEN_OPTIONS } from '@/components/TaskRow'
 import { Page } from '@/components/Page'
 import { useDay, useLeftovers, useStatus, useToday } from '@/data/hooks'
@@ -46,11 +46,12 @@ export function Today({
     if (p !== 'main') toast({ kind: 'info', title: placedToast[p] })
   }
 
-  const [light, heavy] = day?.closedAt
+  // «День закрито» — лише поки після закриття не з'явилося нових справ
+  const [light, heavy] = day?.closedAt && !main.length && !small.length
     ? ['День', 'закрито']
     : main.length
       ? ['Сьогодні', MAIN_WORDS[main.length]]
-      : total
+      : done.length
         ? ['Головне', 'зроблено']
         : ['Що головне', 'сьогодні?']
 
@@ -74,48 +75,60 @@ export function Today({
           />
 
           {now ? (
-            <Card tone="paper" className="flex flex-col gap-4 p-7">
-              <PulseChip dot="#13f287" className="self-start">
+            // Герой картки — сама задача; дія — тиха кругла кнопка, зелений лише на «Зараз»
+            <Card tone="paper" className="flex flex-col gap-5 p-7">
+              <PulseChip tone="growth" dot="#090a0a" className="self-start">
                 Зараз{now.when !== 'any' ? ` · ${WHEN_OPTIONS.find((o) => o.value === now.when)?.label}` : ''}
               </PulseChip>
-              <div>
-                <h2 className="text-[30px] leading-[1.05] font-extrabold tracking-[-0.03em] break-words">{now.title}</h2>
-                {now.firstStep && <p className="mt-2 text-[15px] font-semibold text-paper-muted">Перший крок: {now.firstStep}</p>}
+              <div className="flex items-end gap-4">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-[44px] leading-[0.95] font-extrabold tracking-[-0.04em] break-words">{now.title}</h2>
+                  {now.firstStep && <p className="mt-3 text-[15px] font-semibold text-paper-muted">Перший крок: {now.firstStep}</p>}
+                </div>
+                <button
+                  onClick={() => onOpen(now.id)}
+                  aria-label={`Почати: ${now.title}`}
+                  data-tip="Почати"
+                  className="grid size-14 shrink-0 place-items-center rounded-full bg-canvas text-white transition hover:-translate-y-0.5 active:scale-[0.97]"
+                >
+                  <Icon name="play" size={20} />
+                </button>
               </div>
-              <Button variant="canvas" size="lg" iconLeft="play" fullWidth onClick={() => onOpen(now.id)}>
-                Почати
-              </Button>
             </Card>
-          ) : (
-            !planning &&
-            !day?.closedAt && (
-              <Card tone="data" className="flex flex-col gap-4 p-7">
-                <p className="text-[34px] leading-[0.95] font-light tracking-[-0.035em] uppercase">
-                  Запиши
-                  <strong className="block font-extrabold">1–3 справи</strong>
-                </p>
-                <p className="text-[15px] leading-[1.45] font-medium text-white/85">
-                  Не більше. Решта спокійно почекає у Вхідних — так голова не розпорошується.
-                </p>
-              </Card>
-            )
+          ) : null}
+
+          {total > 0 && (
+            <InfoRow
+              icon="check"
+              title="Зроблено сьогодні"
+              text={done.length ? `${done.length} з ${total}` : 'ще попереду'}
+              progress={(done.length / total) * 100}
+            >
+              <span className="text-[15px] font-extrabold text-white tabular-nums">{Math.round((done.length / total) * 100)}%</span>
+            </InfoRow>
           )}
 
-          {total > 0 && <ProgressTile done={done.length} total={total} />}
-
           {evening && (
-            <Card tone="outline" className="flex flex-col gap-3 shadow-[inset_0_0_0_1px_var(--color-growth)]">
-              <h2 className="text-[20px] font-extrabold tracking-[-0.02em] text-growth">Час закрити день</h2>
-              <p className="text-[15px] font-medium text-grey">Три короткі кроки — і нічого не крутиться в голові до завтра.</p>
-              <Button variant="paper" iconLeft="moon" onClick={onCloseDay} className="self-start">
+            <InfoRow tone="accent" icon="moon" title="Час закрити день" tip="Три кроки — і голова вільна до завтра">
+              <Button size="sm" variant="paper" onClick={onCloseDay}>
                 Закрити день
               </Button>
-            </Card>
+            </InfoRow>
+          )}
+
+          {loaded && main.length === 0 && !planning && (
+            <InfoRow
+              icon={day?.closedAt ? 'moon' : 'target'}
+              title={day?.closedAt ? 'Усе записано' : 'Почніть з однієї справи'}
+              text={day?.closedAt ? 'до завтра' : undefined}
+              tip={day?.closedAt ? undefined : 'До трьох головних на день — решта у Вхідних'}
+            />
           )}
         </>
       }
       main={
         <>
+
           {planning && (
             <PlanDay
               leftovers={leftovers}
@@ -126,24 +139,12 @@ export function Today({
             />
           )}
 
-          {loaded && main.length === 0 && !planning ? (
-            <EmptyCard
-              icon={day?.closedAt ? 'moon' : 'target'}
-              title={day?.closedAt ? 'Усе записано' : 'Почніть з однієї справи'}
-              text={
-                day?.closedAt
-                  ? 'Завтрашнє вже чекає. Голова може відпочити.'
-                  : 'Напишіть її в полі ліворуч і натисніть Enter. Три головні — межа, щоб день не розсипався.'
-              }
-            />
-          ) : (
-            main.length > 0 && (
-              <ListSection title="Головні" count={`${main.length} / ${MAIN_LIMIT}`} first={!planning}>
-                {main.map((t) => (
-                  <TaskRow key={t.id} task={t} onOpen={onOpen} showWhen actions={<BackToInbox id={t.id} />} />
-                ))}
-              </ListSection>
-            )
+          {main.length > 0 && (
+            <ListSection title="Головні" count={`${main.length} / ${MAIN_LIMIT}`}>
+              {main.map((t) => (
+                <TaskRow key={t.id} task={t} onOpen={onOpen} showWhen actions={<BackToInbox id={t.id} />} />
+              ))}
+            </ListSection>
           )}
 
           {small.length > 0 && (
@@ -171,23 +172,6 @@ function BackToInbox({ id }: { id: string }) {
   return <RowAction icon="inbox" label="Повернути у Вхідні" onClick={() => toInbox(id)} />
 }
 
-/** Плитка дня: штрихування — частка зробленого, цифра — герой */
-function ProgressTile({ done, total }: { done: number; total: number }) {
-  const pct = Math.round((done / total) * 100)
-  return (
-    <section className="relative flex h-32 animate-fade-up items-center justify-between overflow-hidden rounded-tile bg-tile pr-5 pl-8">
-      <Hatch value={pct} color="#13f287" />
-      <Glass className="-ml-3.5 flex flex-col gap-1.5 py-3 pr-4 pl-3.5">
-        <span className="text-[20px] font-extrabold tracking-[-0.02em]">Зроблено сьогодні</span>
-        <span className="text-[14px] font-bold text-grey">{done ? `${done} з ${total}` : 'Перша галочка — найважча'}</span>
-      </Glass>
-      <Glass className="px-3.5 py-2.5">
-        <span className="text-[48px] leading-none font-extrabold tracking-[-0.045em] tabular-nums">{pct}%</span>
-      </Glass>
-    </section>
-  )
-}
-
 /** Ранковий вибір: спершу незавершене, потім Вхідні. Один клік — задача на сьогодні. */
 function PlanDay({
   leftovers,
@@ -202,7 +186,8 @@ function PlanDay({
   onTake: (id: string) => void
   onDone: () => void
 }) {
-  const fresh = [...inbox].sort((a, b) => b.inboxAt - a.inboxAt).slice(0, 7)
+  // Незавершені з минулих днів показані окремо — у «З Вхідних» їх не дублюємо
+  const fresh = inbox.filter((t) => !t.planDate).sort((a, b) => b.inboxAt - a.inboxAt).slice(0, 7)
   const row = (t: Task, meta: string) => (
     <PulseRow
       key={t.id}
@@ -221,7 +206,7 @@ function PlanDay({
     />
   )
   return (
-    <section className="flex animate-fade-up flex-col gap-2 rounded-tile bg-tile p-5 pt-7">
+    <section className="flex flex-col gap-2 rounded-tile bg-tile p-5 pt-7">
       <div className="flex items-start justify-between gap-4 px-3 pb-2">
         <div>
           <h2 className="text-[30px] leading-[1.05] font-extrabold tracking-[-0.03em]">План на день</h2>

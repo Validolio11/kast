@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-import { Button, CaptureField, cn, EmptyCard, Icon, PulseChip, RoundButton, useToast } from '@/design-system'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Button, CaptureField, cn, ContextMenu, InfoRow, Icon, PulseChip, RoundButton, useToast } from '@/design-system'
 import { Page } from '@/components/Page'
 import { useNotes } from '@/data/hooks'
-import { createNote, lineToTask, notePreview, noteTitle, removeNote, TASK_LINE, updateNote } from '@/data/notes'
+import { createNote, notePreview, noteTitle, removeNote, updateNote } from '@/data/notes'
+import { captureToInbox } from '@/data/tasks'
+import { RichNote, type RichNoteHandle } from '@/components/RichNote'
+import { htmlToText, textToHtml } from '@/components/richText'
 import type { Note } from '@/data/db'
 import { age, fmtTime, pluralWord } from '@/lib/time'
 
@@ -65,11 +68,11 @@ export function Notebook({ captureRef }: { captureRef: React.RefObject<HTMLInput
           <Sheet key={current.id} note={current} titleRef={titleRef} onDeleted={() => setSelected(null)} />
         ) : (
           loaded && (
-            <EmptyCard icon="notebook" title="Тут народжуються думки" text="Нотатки, протоколи, чернетки. Коли думка стає справою — один Enter, і вона у Вхідних.">
-              <Button iconLeft="plus" onClick={() => create()}>
+            <InfoRow icon="notebook" title="Нотаток ще немає">
+              <Button size="sm" iconLeft="plus" onClick={() => create()}>
                 Нова нотатка
               </Button>
-            </EmptyCard>
+            </InfoRow>
           )
         )
       }
@@ -83,7 +86,7 @@ function NoteTile({ note, selected, onClick }: { note: Note; selected: boolean; 
       onClick={onClick}
       aria-current={selected || undefined}
       className={cn(
-        'flex shrink-0 animate-row-in items-center gap-3 rounded-[30px] px-6 py-[18px] text-left transition-colors duration-150',
+        'row-enter flex shrink-0 items-center gap-3 rounded-[30px] px-6 py-[18px] text-left transition-colors duration-150',
         selected ? 'bg-steel' : 'bg-tile hover:bg-[#2a2a2c]',
       )}
     >
@@ -100,75 +103,123 @@ function NoteTile({ note, selected, onClick }: { note: Note; selected: boolean; 
   )
 }
 
-/** Аркуш нотатки: заголовок — перший рядок, далі текст. Зберігається сам. */
+/** Аркуш нотатки: заголовок — перший рядок, далі форматований текст. Зберігається сам. */
 function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefObject<HTMLInputElement | null>; onDeleted: () => void }) {
-  const [body, setBody] = useState(note.body)
   const toast = useToast()
-  const textRef = useRef<HTMLTextAreaElement>(null)
+  const editorRef = useRef<RichNoteHandle>(null)
+  const split = (body: string) => {
+    const nl = body.indexOf('\n')
+    return nl === -1 ? [body, ''] : [body.slice(0, nl), body.slice(nl + 1)]
+  }
+  // Сторінки: збережені, або (стара нотатка) одна сторінка з html чи простого тексту
+  const pagesOf = (n: Note) => (n.pages?.length ? n.pages : [n.html ?? textToHtml(split(n.body)[1])])
+  const [title, setTitle] = useState(() => split(note.body)[0])
+  const [pages, setPages] = useState(() => pagesOf(note))
+  const [page, setPage] = useState(0)
+  const [pageMenu, setPageMenu] = useState<{ x: number; y: number; index: number } | null>(null)
+  const draft = useRef({ title: split(note.body)[0], pages: pagesOf(note), texts: pagesOf(note).map(htmlToText) })
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const pending = useRef<string | null>(null)
-
-  const nl = body.indexOf('\n')
-  const title = nl === -1 ? body : body.slice(0, nl)
-  const rest = nl === -1 ? '' : body.slice(nl + 1)
+  const pending = useRef(false)
 
   // Зміни ззовні (синхронізація, швидкий запис) підхоплюємо, якщо ви зараз не друкуєте
   useEffect(() => {
-    if (pending.current === null && note.body !== body) setBody(note.body)
+    if (pending.current) return
+    const next = pagesOf(note)
+    draft.current = { title: split(note.body)[0], pages: next, texts: next.map(htmlToText) }
+    setTitle(draft.current.title)
+    setPages(next)
+    setPage((p) => Math.min(p, next.length - 1))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [note.body])
+  }, [note.body, note.html, note.pages])
 
   const flush = () => {
     clearTimeout(saveTimer.current)
-    if (pending.current !== null) updateNote(note.id, { body: pending.current })
-    pending.current = null
+    if (!pending.current) return
+    const { title: t, pages: all, texts } = draft.current
+    // Простий текст — усі сторінки підряд: пошук і прев'ю бачать увесь зміст
+    const rest = texts.filter((x) => x.trim()).join('\n')
+    updateNote(note.id, { body: rest ? `${t}\n${rest}` : t, html: all[0], pages: all })
+    pending.current = false
   }
-  useEffect(() => flush, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(
+    () => () => {
+      flush()
+      // Порожня нотатка (створили «+» і пішли) не лишається сміттям у списку
+      const { title: t, pages: all, texts } = draft.current
+      if (!t.trim() && texts.every((x) => !x.trim()) && !all.some((h) => h.includes('note-chip'))) removeNote(note.id)
+    },
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  )
 
-  const change = (v: string) => {
-    setBody(v)
-    pending.current = v
+  const schedule = () => {
+    pending.current = true
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(flush, 400)
   }
 
-  /** lineIndex — номер рядка в тексті під заголовком */
-  const convert = async (lineIndex: number, addNewLine: boolean) => {
-    flush()
-    const next = await lineToTask(note.id, body, lineIndex + 1)
-    if (next === null) return
-    const lines = next.split('\n')
-    if (addNewLine) lines.splice(lineIndex + 2, 0, '')
-    const result = lines.join('\n')
-    setBody(result)
-    if (addNewLine) {
-      updateNote(note.id, { body: result })
-      const caret = lines.slice(1, lineIndex + 2).join('\n').length + 1
-      requestAnimationFrame(() => textRef.current?.setSelectionRange(caret, caret))
-    }
-    toast({ title: 'Задачу додано у Вхідні' })
+  const setDraftPages = (all: string[], texts: string[]) => {
+    draft.current = { ...draft.current, pages: all, texts }
+    setPages(all)
+    schedule()
   }
 
-  const onKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key !== 'Enter' || e.shiftKey) return
-    const pos = e.currentTarget.selectionStart
-    const lineIndex = rest.slice(0, pos).split('\n').length - 1
-    const line = rest.split('\n')[lineIndex] ?? ''
-    const atLineEnd = rest.indexOf('\n', pos) === -1 ? pos === rest.length : rest[pos] === '\n'
-    if (e.ctrlKey || (TASK_LINE.test(line) && line.replace(TASK_LINE, '').trim() && atLineEnd)) {
-      e.preventDefault()
-      await convert(lineIndex, !e.ctrlKey)
-    }
-  }
+  const pageRef = useRef(page)
+  pageRef.current = page
+  const onText = useCallback((html: string, text: string) => {
+    const i = pageRef.current
+    const all = [...draft.current.pages]
+    const texts = [...draft.current.texts]
+    all[i] = html
+    texts[i] = text
+    draft.current = { ...draft.current, pages: all, texts }
+    schedule()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  const convertCurrent = () => {
-    const el = textRef.current
-    if (!el) return
-    convert(rest.slice(0, el.selectionStart).split('\n').length - 1, false)
+  /* ───────── Сторінки, як у Karkas ───────── */
+  const focusAfterSwitch = useRef(false)
+  const openPage = (i: number) => {
+    setPage(i)
+    setPageMenu(null)
   }
+  const addPage = () => {
+    const all = [...draft.current.pages, '<div><br></div>']
+    setDraftPages(all, [...draft.current.texts, ''])
+    focusAfterSwitch.current = true
+    openPage(all.length - 1)
+  }
+  const deletePage = (i: number) => {
+    if (draft.current.pages.length < 2) return
+    const before = { pages: draft.current.pages, texts: draft.current.texts, page }
+    setDraftPages(
+      draft.current.pages.filter((_, j) => j !== i),
+      draft.current.texts.filter((_, j) => j !== i),
+    )
+    // Лишаємось на тій самій сторінці; якщо видалили поточну — на сусідній
+    const last = draft.current.pages.length - 1
+    openPage(i < page ? page - 1 : Math.min(page, last))
+    toast({
+      kind: 'info',
+      title: `Сторінку ${i + 1} видалено`,
+      action: {
+        label: 'Скасувати',
+        onClick: () => {
+          setDraftPages(before.pages, before.texts)
+          openPage(before.page)
+        },
+      },
+    })
+  }
+  useEffect(() => {
+    if (!focusAfterSwitch.current) return
+    focusAfterSwitch.current = false
+    requestAnimationFrame(() => editorRef.current?.focusStart())
+  }, [page])
+
+  const html = pages[page] ?? pages[0]
 
   return (
-    <section className="flex min-h-[520px] animate-fade-up flex-col rounded-panel bg-paper p-10 pb-6 text-ink max-[640px]:p-6 min-[1040px]:min-h-0 min-[1040px]:flex-1">
+    <section className="flex min-h-[520px] flex-col rounded-panel bg-paper p-10 pb-6 text-ink max-[640px]:p-6 min-[1040px]:min-h-0 min-[1040px]:flex-1">
       <div className="flex items-center gap-3">
         {!!note.pinned && <PulseChip tone="growth">Закріплено</PulseChip>}
         <span className="text-[14px] font-bold text-dim">
@@ -178,36 +229,81 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
       <input
         ref={titleRef}
         value={title}
-        onChange={(e) => change(e.target.value.replace(/\n/g, ' ') + (nl === -1 && !rest ? '' : '\n' + rest))}
+        onChange={(e) => {
+          const t = e.target.value.replace(/\n/g, ' ')
+          setTitle(t)
+          draft.current = { ...draft.current, title: t }
+          schedule()
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault()
-            if (nl === -1) change(`${title}\n`)
-            requestAnimationFrame(() => {
-              textRef.current?.focus()
-              textRef.current?.setSelectionRange(0, 0)
-            })
+            editorRef.current?.focusStart()
           }
         }}
         onBlur={flush}
         placeholder="Заголовок"
         className="mt-5 w-full bg-transparent text-[44px] leading-[0.95] font-extrabold tracking-[-0.04em] text-ink outline-none placeholder:text-dim max-[640px]:text-[32px]"
       />
-      <textarea
-        ref={textRef}
-        value={rest}
-        onChange={(e) => change(`${title}\n${e.target.value}`)}
-        onKeyDown={onKeyDown}
-        onBlur={flush}
-        spellCheck
-        placeholder={'Думки, плани, протокол зустрічі…\n[] Рядок із дужками + Enter стане задачею'}
-        className="mt-6 min-h-0 w-full flex-1 resize-none bg-transparent text-[17px] leading-[1.6] font-medium text-ink outline-none placeholder:text-dim"
-      />
-      <div className="mt-4 flex items-center gap-2 border-t border-paper-line pt-4">
-        <Button variant="canvas" size="md" iconLeft="arrowUpRight" onClick={convertCurrent} data-tip="Ctrl + Enter">
+      <div className="mt-6 flex min-h-0 flex-1 flex-col">
+        <RichNote
+          key={page}
+          ref={editorRef}
+          html={html}
+          placeholder={'Думки, плани, протокол зустрічі…\n[] Рядок із дужками + Enter стане задачею\nПравий клік по виділеному — шрифт, нумерація, кнопка копіювання'}
+          onChange={onText}
+          onLineToTask={async (t) => {
+            await captureToInbox(t, { sourceNoteId: note.id })
+          }}
+        />
+      </div>
+      {/* Підвал як у Karkas: дія ліворуч, сторінки по центру, закріпити й видалити праворуч; тісно — переноситься */}
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-paper-line pt-4">
+        <Button variant="canvas" size="md" iconLeft="arrowUpRight" onClick={() => editorRef.current?.convertCurrent()} data-tip="Ctrl + Enter">
           Рядок у задачі
         </Button>
-        <span className="ml-auto" />
+        <div className="flex flex-1 justify-center">
+          <div
+            role="tablist"
+            aria-label="Сторінки"
+            className="flex shrink-0 items-center gap-0.5 rounded-[22px] bg-paper-line p-[3px]"
+            onKeyDown={(e) => {
+              const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+              if (!dir) return
+              e.preventDefault()
+              openPage((page + dir + pages.length) % pages.length)
+            }}
+          >
+            {pages.map((_, i) => (
+              <button
+                key={i}
+                role="tab"
+                aria-selected={i === page}
+                aria-label={`Сторінка ${i + 1}`}
+                tabIndex={i === page ? 0 : -1}
+                onClick={() => openPage(i)}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  if (pages.length > 1) setPageMenu({ x: e.clientX, y: e.clientY, index: i })
+                }}
+                className={cn(
+                  'size-9 rounded-full text-[14px] font-extrabold tabular-nums transition-[background-color,color,transform] duration-200 active:scale-[0.88]',
+                  i === page ? 'bg-canvas text-white' : 'text-paper-muted hover:text-ink',
+                )}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button
+              onClick={addPage}
+              aria-label="Нова сторінка"
+              data-tip="Нова сторінка"
+              className="grid size-9 place-items-center rounded-full text-paper-muted transition-[color,transform] hover:text-ink active:scale-[0.88]"
+            >
+              <Icon name="plus" size={15} strokeWidth={2.6} />
+            </button>
+          </div>
+        </div>
         <RoundButton
           icon="pin"
           tone="paper-line"
@@ -226,6 +322,19 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
           }}
         />
       </div>
+      {pageMenu && (
+        <ContextMenu
+          x={pageMenu.x}
+          y={pageMenu.y}
+          label={`Сторінка ${pageMenu.index + 1}`}
+          onClose={() => setPageMenu(null)}
+          items={[
+            { label: 'Відкрити', icon: 'arrowUpRight', onSelect: () => openPage(pageMenu.index) },
+            { label: 'Нова сторінка', icon: 'plus', onSelect: addPage },
+            { label: 'Видалити сторінку', icon: 'trashLines', tone: 'danger', onSelect: () => (setPageMenu(null), deletePage(pageMenu.index)) },
+          ]}
+        />
+      )}
     </section>
   )
 }

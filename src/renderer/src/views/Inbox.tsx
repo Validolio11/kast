@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CaptureField, Card, EmptyCard, ListSection, RowAction, useToast } from '@/design-system'
+import { CaptureField, InfoRow, ListSection, RowAction, useToast } from '@/design-system'
 import { Page } from '@/components/Page'
 import { TaskRow } from '@/components/TaskRow'
 import { WeeklyReview } from '@/flows/WeeklyReview'
@@ -67,16 +67,15 @@ export function Inbox({
             autoFocus
           />
           {n > 0 && (
-          <Card className="flex flex-col gap-2 p-7">
-            <span className="text-[48px] leading-none font-extrabold tracking-[-0.045em] tabular-nums">{n}</span>
-            <span className="text-[14px] font-bold text-grey">
-              {waitWord}
-              {oldest ? ` · найстаріший ${age(oldest)}` : ''}
-            </span>
-            <p className="mt-2 text-[13px] font-semibold text-muted">
-              Записи, що лежать понад {STALE_DAYS} днів, тихо йдуть у «Колись». Нічого не губиться, але й не тисне.
-            </p>
-          </Card>
+            <InfoRow
+              icon="inbox"
+              title={`${n} ${waitWord}`}
+              text={oldest ? `найстаріший ${age(oldest)}` : undefined}
+              tip={`Старше ${STALE_DAYS} днів тихо йде в «Колись»`}
+            />
+          )}
+          {loaded && n === 0 && (
+            <InfoRow icon="inbox" title="Вхідні порожні" text={prettyHotkey(hotkey)} tip="Швидкий запис з будь-якої програми" />
           )}
         </>
       }
@@ -84,15 +83,8 @@ export function Inbox({
         <>
           {review.length > 0 && <WeeklyReview tasks={review} onDone={() => setReview([])} />}
 
-          {loaded && n === 0 ? (
-            <EmptyCard
-              icon="inbox"
-              title="Вхідні порожні"
-              text={`Записуйте все, що спадає на думку, — навіть з інших програм через ${prettyHotkey(hotkey)}.`}
-            />
-          ) : (
-            n > 0 && (
-              <ListSection title="Нові" count={n} first={!review.length}>
+          {n > 0 && (
+              <ListSection title="Нові" count={n}>
                 {fresh.map((t) => (
                   <TaskRow
                     key={t.id}
@@ -109,7 +101,6 @@ export function Inbox({
                   />
                 ))}
               </ListSection>
-            )
           )}
 
           {someday.length > 0 && (
