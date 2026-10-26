@@ -74,7 +74,7 @@ function BackupRow() {
     }
   }
   return (
-    <SettingRow title="Резервна копія" text="Файл з усіма задачами й нотатками">
+    <SettingRow title="Резервна копія" text="Усе в одному файлі">
       <div className="flex gap-2">
         <Button size="sm" variant="steel" iconLeft="download" loading={busy} disabled={!window.kast} onClick={save}>
           Зберегти
