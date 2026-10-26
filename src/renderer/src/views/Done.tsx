@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { CaptureBar, EmptyState, ListGroup, WeekStrip } from '@/design-system'
+import { CaptureField, Card, EmptyCard, ListSection, WeekStrip } from '@/design-system'
 import { Page } from '@/components/Page'
 import { TaskRow } from '@/components/TaskRow'
 import { useDone } from '@/data/hooks'
-import { dayKey, fmtShortDay, fmtTime, fmtWeekday, nowDate, weekStart } from '@/lib/time'
+import { dayKey, fmtShortDay, fmtTime, fmtWeekday, nowDate, plural, weekStart } from '@/lib/time'
 
 export function Done({ captureRef, onOpen }: { captureRef: React.RefObject<HTMLInputElement | null>; onOpen: (id: string) => void }) {
   const [query, setQuery] = useState('')
@@ -27,56 +27,66 @@ export function Done({ captureRef, onOpen }: { captureRef: React.RefObject<HTMLI
   const todays = list.filter((t) => keyOf(t.doneAt) === today)
   const thisWeek = list.filter((t) => keyOf(t.doneAt) !== today && (t.doneAt ?? 0) >= monday.getTime())
   const earlier = list.filter((t) => (t.doneAt ?? 0) < monday.getTime()).slice(0, 100)
+  const firstGroup = todays.length ? 'today' : thisWeek.length ? 'week' : 'earlier'
 
   return (
     <Page
-      title="Готово"
-      subtitle="Видимий прогрес — без оцінок і прострочень"
-      meta={`${weekTotal} цього тижня`}
-      capture={
-        <CaptureBar
-          ref={captureRef}
-          icon="search"
-          search
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onSubmit={() => {}}
-          placeholder="Пошук у зробленому…"
-          autoFocus
-          hint="Ctrl N"
-        />
+      light="Що вже"
+      heavy="зроблено"
+      sub="Видимий прогрес — без оцінок і прострочень"
+      side={
+        <>
+          <CaptureField
+            ref={captureRef}
+            icon="search"
+            search
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onSubmit={() => {}}
+            placeholder="Пошук у зробленому"
+            autoFocus
+          />
+          <Card className="flex flex-col gap-5 p-6">
+            <div className="flex items-end justify-between gap-3 px-1">
+              <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">Цей тиждень</h2>
+              <span className="text-[14px] font-bold text-grey">{plural(weekTotal, ['справа', 'справи', 'справ'])}</span>
+            </div>
+            <WeekStrip days={week} />
+          </Card>
+        </>
       }
-    >
-      {!q && <WeekStrip days={week} />}
-
-      {todays.length > 0 && (
-        <ListGroup label="Сьогодні" count={todays.length}>
-          {todays.map((t) => (
-            <TaskRow key={t.id} task={t} onOpen={onOpen} meta={<span className="tabular-nums">{fmtTime(t.doneAt!)}</span>} />
-          ))}
-        </ListGroup>
-      )}
-      {thisWeek.length > 0 && (
-        <ListGroup label="Цей тиждень" count={thisWeek.length}>
-          {thisWeek.map((t) => (
-            <TaskRow key={t.id} task={t} onOpen={onOpen} meta={fmtWeekday(new Date(t.doneAt!))} />
-          ))}
-        </ListGroup>
-      )}
-      {earlier.length > 0 && (
-        <ListGroup label="Раніше" count={earlier.length} collapsible defaultOpen={!!q}>
-          {earlier.map((t) => (
-            <TaskRow key={t.id} task={t} onOpen={onOpen} meta={fmtShortDay(t.doneAt!)} />
-          ))}
-        </ListGroup>
-      )}
-      {loaded && list.length === 0 && (
-        <EmptyState
-          icon={q ? 'search' : 'check'}
-          title={q ? 'Нічого не знайдено' : 'Тут збиратиметься зроблене'}
-          text={q ? undefined : 'Кожна галочка лишається тут. Наприкінці тижня приємно подивитися, скільки всього позаду.'}
-        />
-      )}
-    </Page>
+      main={
+        <>
+          {todays.length > 0 && (
+            <ListSection title="Сьогодні" count={todays.length} first>
+              {todays.map((t) => (
+                <TaskRow key={t.id} task={t} onOpen={onOpen} meta={<span className="tabular-nums">{fmtTime(t.doneAt!)}</span>} />
+              ))}
+            </ListSection>
+          )}
+          {thisWeek.length > 0 && (
+            <ListSection title="Цей тиждень" count={thisWeek.length} first={firstGroup === 'week'}>
+              {thisWeek.map((t) => (
+                <TaskRow key={t.id} task={t} onOpen={onOpen} meta={fmtWeekday(new Date(t.doneAt!))} />
+              ))}
+            </ListSection>
+          )}
+          {earlier.length > 0 && (
+            <ListSection title="Раніше" count={earlier.length} collapsible defaultOpen={!!q} first={firstGroup === 'earlier'}>
+              {earlier.map((t) => (
+                <TaskRow key={t.id} task={t} onOpen={onOpen} meta={fmtShortDay(t.doneAt!)} />
+              ))}
+            </ListSection>
+          )}
+          {loaded && list.length === 0 && (
+            <EmptyCard
+              icon={q ? 'search' : 'check'}
+              title={q ? 'Нічого не знайдено' : 'Тут збиратиметься зроблене'}
+              text={q ? undefined : 'Кожна галочка лишається тут. Наприкінці тижня приємно подивитися, скільки всього позаду.'}
+            />
+          )}
+        </>
+      }
+    />
   )
 }

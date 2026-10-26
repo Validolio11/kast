@@ -22,6 +22,8 @@ let capture: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
 
+// Налагодження: KAST_CDP=9333 відкриває порт DevTools (знімки вікна, автотести)
+if (process.env.KAST_CDP) app.commandLine.appendSwitch('remote-debugging-port', process.env.KAST_CDP)
 if (!app.requestSingleInstanceLock()) app.quit()
 app.setAppUserModelId('com.kast.app')
 
@@ -51,8 +53,8 @@ function createMain() {
     title: 'Kast',
     icon: ICON,
     backgroundColor: '#090a0a',
-    titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#090a0a', symbolColor: '#a1a1a6', height: 40 },
+    // Рамку малює шапка Pulse: кнопки вікна в капсулі, як у Karkas
+    frame: false,
     webPreferences: webPreferences(),
   })
   if (b?.maximized) main.maximize()
@@ -67,6 +69,8 @@ function createMain() {
   }
   main.on('resize', saveBounds)
   main.on('move', saveBounds)
+  main.on('maximize', () => main?.webContents.send('window:maximized', true))
+  main.on('unmaximize', () => main?.webContents.send('window:maximized', false))
 
   // Закриття ховає вікно в трей, щоб гаряча клавіша запису працювала далі
   main.on('close', (e) => {
@@ -199,6 +203,10 @@ function setupIpc() {
   })
   ipcMain.on('notify', (_e, title: string, body: string, target?: NavTarget) => notify(title, body, target))
   ipcMain.on('capture:hide', () => capture?.hide())
+  ipcMain.on('window:minimize', () => main?.minimize())
+  ipcMain.on('window:toggleMaximize', () => (main?.isMaximized() ? main.unmaximize() : main?.maximize()))
+  ipcMain.on('window:close', () => main?.close())
+  ipcMain.handle('window:isMaximized', () => !!main?.isMaximized())
 }
 
 app.on('second-instance', () => showMain())

@@ -1,123 +1,189 @@
 /*
- * Щільний шар Karkas Pulse для робочого інтерфейсу.
- * Усі сторінки збираються з тих самих блоків: PageHeader → CaptureBar → ListGroup/ListRow → Banner.
- * Однакове місце й анатомія кожного блоку = менше пошуку очима.
+ * Karkas Pulse для Kast: чорне полотно, капсули, цифра — герой, зелений лише для росту.
+ * Кожна сторінка збирається однаково: PageHead (два рядки великими) → PageGrid (колонка 400px + основна).
+ * Джерело токенів і правил — дизайн-система «Karkas Pulse» у конструкторі.
  */
-import { forwardRef, useState, type InputHTMLAttributes, type ReactNode } from 'react'
-import { Icon, KMark, type IconName } from './Icon'
+import { forwardRef, useEffect, useId, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react'
+import { Icon, type IconName } from './Icon'
 import { cn } from './utils'
 
-/* ───────────── TitleBar ───────────── */
-/** Верхня смуга 40px: тягне вікно; кнопки Windows малює система (titleBarOverlay) */
-export function TitleBar({ children }: { children?: ReactNode }) {
+/* ───────────── Знак ───────────── */
+/** Блоковий K на колі paper — знак Kast у тій самій формі, що й знак Karkas */
+export function KastMark({ size = 44 }: { size?: number }) {
   return (
-    <div className="drag flex h-10 shrink-0 items-center gap-2.5 pr-[140px] pl-4">
-      <span className="grid size-6 place-items-center rounded-[7px] bg-paper text-night">
-        <KMark size={14} />
-      </span>
-      <span className="text-[13px] font-extrabold tracking-[0.08em] uppercase">Kast</span>
-      <div className="no-drag ml-auto flex items-center gap-2">{children}</div>
-    </div>
+    <span className="grid shrink-0 place-items-center rounded-full bg-paper text-ink" style={{ width: size, height: size }}>
+      <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <path d="M3 2h7v7h3V2h8v7l-4 4 4 4v5h-8v-7h-3v7H3z" />
+      </svg>
+    </span>
   )
 }
 
-/* ───────────── NavRail ───────────── */
-export interface NavItem<T extends string> {
+/* ───────────── Шапка ───────────── */
+export interface NavTab<T extends string> {
   id: T
   label: string
-  icon: IconName
-  /** Нейтральна мета-цифра (не червоний бейдж) */
-  meta?: string
-  shortcut?: string
+  /** Нейтральна цифра поруч (не червоний бейдж) */
+  count?: number
+  tip?: string
 }
 
-export function NavRail<T extends string>({
-  items,
+/** Шапка 76px: знак, вкладки-капсули по центру, дії й кнопки вікна праворуч. Порожні місця тягнуть вікно. */
+export function AppHeader<T extends string>({
+  tabs,
   active,
   onSelect,
-  footer,
+  actions,
+  windowControls,
 }: {
-  items: NavItem<T>[]
+  tabs: NavTab<T>[]
   active: T
   onSelect: (id: T) => void
-  footer?: ReactNode
+  actions?: ReactNode
+  windowControls?: ReactNode
 }) {
   return (
-    <nav aria-label="Розділи" className="flex w-[208px] shrink-0 flex-col gap-1 px-3 pt-2 pb-3 max-[900px]:w-[68px]">
-      {items.map((it) => {
-        const on = it.id === active
-        return (
-          <button
-            key={it.id}
-            onClick={() => onSelect(it.id)}
-            aria-current={on ? 'page' : undefined}
-            title={it.shortcut ? `${it.label}  ${it.shortcut}` : it.label}
-            className={cn(
-              'group flex h-11 items-center gap-3 rounded-row px-3 text-left text-[14px] font-semibold transition-colors duration-150',
-              on ? 'bg-graphite text-paper' : 'text-fog hover:bg-hover hover:text-paper',
-            )}
-          >
-            <span
+    <header className="drag grid min-h-[76px] shrink-0 grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-4 py-4 pr-4 pl-6 select-none">
+      <KastMark />
+      <nav aria-label="Розділи" className="flex justify-center gap-1">
+        {tabs.map((t) => {
+          const on = t.id === active
+          return (
+            <button
+              key={t.id}
+              onClick={() => onSelect(t.id)}
+              aria-current={on ? 'page' : undefined}
+              data-tip={t.tip}
               className={cn(
-                'grid size-7 shrink-0 place-items-center rounded-full transition-colors duration-200',
-                on ? 'bg-paper text-night' : 'text-current',
+                'no-drag inline-flex h-11 shrink-0 items-center gap-2 rounded-full px-5 text-[15px] whitespace-nowrap transition-colors duration-150 max-[900px]:px-4',
+                on ? 'bg-paper font-extrabold text-ink' : 'font-semibold text-grey hover:bg-tile hover:text-paper',
               )}
             >
-              <Icon name={it.icon} size={16} />
-            </span>
-            <span className="flex-1 truncate max-[900px]:hidden">{it.label}</span>
-            {it.meta && (
-              <span className="text-[12px] font-bold text-fog-2 tabular-nums max-[900px]:hidden">{it.meta}</span>
-            )}
-          </button>
-        )
-      })}
-      <div className="mt-auto flex flex-col gap-1">{footer}</div>
-    </nav>
-  )
-}
-
-export function NavButton({ icon, label, onClick, badge }: { icon: IconName; label: string; onClick: () => void; badge?: ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      title={label}
-      className="flex h-11 items-center gap-3 rounded-row px-3 text-left text-[14px] font-semibold text-fog transition-colors hover:bg-hover hover:text-paper"
-    >
-      <span className="relative grid size-7 shrink-0 place-items-center">
-        <Icon name={icon} size={16} />
-        {badge && <span className="absolute top-0.5 right-0.5 grid">{badge}</span>}
-      </span>
-      <span className="flex-1 truncate max-[900px]:hidden">{label}</span>
-    </button>
-  )
-}
-
-/* ───────────── PageHeader ───────────── */
-export function PageHeader({ title, subtitle, meta }: { title: string; subtitle?: ReactNode; meta?: ReactNode }) {
-  return (
-    <header className="flex items-end justify-between gap-4">
-      <div className="min-w-0">
-        <h1 className="text-[22px] leading-tight font-bold tracking-tight">{title}</h1>
-        {subtitle && <p className="mt-1 truncate text-[13px] font-semibold text-fog">{subtitle}</p>}
+              {t.label}
+              {!!t.count && <span className={cn('text-[13px] font-bold tabular-nums', on ? 'text-paper-muted' : 'text-muted')}>{t.count}</span>}
+            </button>
+          )
+        })}
+      </nav>
+      <div className="no-drag flex items-center justify-end gap-2">
+        {actions}
+        {windowControls}
       </div>
-      {meta && <div className="shrink-0 pb-0.5 text-[13px] font-bold text-fog tabular-nums">{meta}</div>}
     </header>
   )
 }
 
-/* ───────────── CaptureBar ───────────── */
-export interface CaptureBarProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onSubmit'> {
-  icon?: IconName
-  onSubmit: (value: string) => void
-  /** Підказка праворуч, коли поле порожнє (наприклад, Ctrl+N) */
-  hint?: string
-  /** Поле-фільтр: без кнопки відправлення */
-  search?: boolean
+export function WindowControls({
+  maximized,
+  onMinimize,
+  onToggleMaximize,
+  onClose,
+}: {
+  maximized: boolean
+  onMinimize: () => void
+  onToggleMaximize: () => void
+  onClose: () => void
+}) {
+  const btn = 'grid size-9 place-items-center rounded-full text-soft transition-colors hover:bg-steel hover:text-white'
+  return (
+    <div className="ml-2 flex shrink-0 items-center gap-0.5 rounded-[26px] bg-tile p-1">
+      <button className={btn} onClick={onMinimize} aria-label="Згорнути">
+        <Icon name="minus" size={16} />
+      </button>
+      <button className={btn} onClick={onToggleMaximize} aria-label={maximized ? 'Відновити' : 'Розгорнути'}>
+        <Icon name={maximized ? 'copy' : 'square'} size={14} />
+      </button>
+      <button className={cn(btn, 'hover:bg-behind')} onClick={onClose} aria-label="Закрити у трей">
+        <Icon name="x" size={16} />
+      </button>
+    </div>
+  )
 }
 
-export const CaptureBar = forwardRef<HTMLInputElement, CaptureBarProps>(function CaptureBar(
-  { icon = 'plus', onSubmit, hint, search, className, value, ...rest },
+/** Кругла кнопка-іконка 44/56px */
+export function RoundButton({
+  icon,
+  label,
+  onClick,
+  badge,
+  size = 44,
+  tone = 'tile',
+}: {
+  icon: IconName
+  label: string
+  onClick: () => void
+  badge?: ReactNode
+  size?: 44 | 56
+  tone?: 'tile' | 'paper' | 'paper-line'
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      data-tip={label}
+      className={cn(
+        'relative grid shrink-0 place-items-center rounded-full transition-[background-color,transform] duration-150 active:scale-[0.97]',
+        tone === 'tile' && 'bg-tile text-paper hover:bg-steel',
+        tone === 'paper' && 'bg-paper text-ink hover:bg-white',
+        tone === 'paper-line' && 'bg-paper-line text-ink hover:bg-[#d8d8d6]',
+      )}
+      style={{ width: size, height: size }}
+    >
+      <Icon name={icon} size={size === 56 ? 20 : 18} />
+      {badge && <span className="absolute right-px bottom-px grid">{badge}</span>}
+    </button>
+  )
+}
+
+/* ───────────── Сторінка ───────────── */
+/**
+ * Заголовок сторінки: два рядки великими — тонкий над жирним.
+ * Покращення до Pulse: розмір тягнеться від 44 до 80px за шириною й висотою вікна,
+ * щоб на ноутбуці заголовок не з'їдав половину екрана.
+ */
+export function PageHead({ light, heavy, sub, actions }: { light: string; heavy: string; sub?: ReactNode; actions?: ReactNode }) {
+  return (
+    <div className="mb-7 flex animate-fade-up items-start justify-between gap-5">
+      <div className="flex min-w-0 flex-col items-start gap-3.5">
+        <h1 className="text-[clamp(44px,min(6vw,9vh),80px)] leading-[0.92] tracking-[-0.035em] uppercase">
+          <span className="block font-light">{light}</span>
+          <span className="block font-extrabold">{heavy}</span>
+        </h1>
+        {sub && <div className="text-[14px] font-bold text-grey">{sub}</div>}
+      </div>
+      {actions && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
+    </div>
+  )
+}
+
+/** Сітка Pulse: ліва колонка 400px і основна; вужче 1040px — одна колонка */
+export function PageGrid({ side, main, fill }: { side: ReactNode; main: ReactNode; fill?: boolean }) {
+  return (
+    <div
+      className={cn(
+        'grid min-w-0 grid-cols-[400px_minmax(0,1fr)] items-start gap-6 max-[1039px]:grid-cols-1',
+        fill && 'min-h-0 flex-1 items-stretch',
+      )}
+    >
+      <div className={cn('flex min-w-0 flex-col gap-3', fill && 'min-h-0')}>{side}</div>
+      <div className={cn('flex min-w-0 flex-col gap-3', fill && 'min-h-0')}>{main}</div>
+    </div>
+  )
+}
+
+/* ───────────── Поле запису ───────────── */
+export interface CaptureFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onSubmit'> {
+  icon?: IconName
+  onSubmit: (value: string) => void
+  /** Поле-фільтр: без кнопки відправлення */
+  search?: boolean
+  /** Кругла paper-кнопка праворуч, коли поле порожнє (наприклад, «Нова нотатка») */
+  action?: { icon: IconName; label: string; onClick: () => void }
+}
+
+/** Капсула 56px на tile: пишеш і Enter. Фокус — внутрішня зелена обвідка, як у пошуку Karkas. */
+export const CaptureField = forwardRef<HTMLInputElement, CaptureFieldProps>(function CaptureField(
+  { icon = 'plus', onSubmit, search, action, className, value, ...rest },
   ref,
 ) {
   const has = typeof value === 'string' && value.trim().length > 0
@@ -128,118 +194,152 @@ export const CaptureBar = forwardRef<HTMLInputElement, CaptureBarProps>(function
         if (has) onSubmit((value as string).trim())
       }}
       className={cn(
-        'group flex h-12 items-center gap-3 rounded-full bg-graphite pr-2 pl-4 ring-1 ring-white/8 ring-inset',
-        'transition-[box-shadow] duration-200 focus-within:ring-2 focus-within:ring-volt-glow hover:ring-white/15',
+        'group flex h-14 shrink-0 items-center gap-3 rounded-full bg-tile pr-1.5 pl-5 transition-shadow duration-150',
+        'focus-within:shadow-[inset_0_0_0_2px_var(--color-growth)]',
         className,
       )}
     >
-      <Icon name={icon} size={18} className="shrink-0 text-fog transition-colors group-focus-within:text-paper" />
+      <Icon name={icon} size={18} className="shrink-0 text-grey" />
       <input
         ref={ref}
         value={value}
-        className="h-full min-w-0 flex-1 bg-transparent text-[15px] font-medium text-paper outline-none placeholder:text-fog-2"
+        className="h-full min-w-0 flex-1 bg-transparent text-[16px] font-semibold text-paper caret-growth outline-none placeholder:text-muted"
         {...rest}
       />
       {has && !search ? (
         <button
           type="submit"
           aria-label="Додати"
-          className="grid size-8 shrink-0 animate-pop place-items-center rounded-full bg-paper text-night transition active:scale-90"
+          className="grid size-11 shrink-0 animate-pop place-items-center rounded-full bg-paper text-ink transition active:scale-90"
         >
-          <Icon name="enter" size={16} />
+          <Icon name="arrowRight" size={18} />
         </button>
       ) : (
-        hint && <Kbd className="mr-1.5">{hint}</Kbd>
+        action && (
+          <button
+            type="button"
+            onClick={action.onClick}
+            aria-label={action.label}
+            data-tip={action.label}
+            className="grid size-11 shrink-0 place-items-center rounded-full bg-paper text-ink transition active:scale-90"
+          >
+            <Icon name={action.icon} size={18} />
+          </button>
+        )
       )}
     </form>
   )
 })
 
-/* ───────────── Kbd ───────────── */
-export function Kbd({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <kbd
-      className={cn(
-        'inline-flex h-6 items-center rounded-[7px] border border-white/10 bg-night px-1.5 font-sans text-[11px] font-bold text-fog',
-        className,
-      )}
-    >
-      {children}
-    </kbd>
-  )
+/* ───────────── Картка ───────────── */
+export type CardTone = 'tile' | 'paper' | 'growth' | 'data' | 'steel' | 'outline'
+const cardTone: Record<CardTone, string> = {
+  tile: 'bg-tile text-white',
+  paper: 'bg-paper text-ink',
+  growth: 'bg-growth text-ink',
+  data: 'bg-data text-white',
+  steel: 'bg-steel text-white',
+  outline: 'text-paper shadow-[inset_0_0_0_1px_var(--color-tile)]',
 }
 
-/* ───────────── ListGroup ───────────── */
-export function ListGroup({
-  label,
-  count,
-  collapsible,
-  defaultOpen = true,
-  action,
-  children,
-}: {
-  label: string
-  count?: number | string
-  collapsible?: boolean
-  defaultOpen?: boolean
-  action?: ReactNode
-  children: ReactNode
-}) {
-  const [open, setOpen] = useState(defaultOpen)
-  const head = (
-    <>
-      <span className="text-[11px] font-bold tracking-[0.08em] text-fog uppercase">{label}</span>
-      {count !== undefined && <span className="text-[11px] font-bold text-fog-2 tabular-nums">{count}</span>}
-      {collapsible && (
-        <Icon name="chevronDown" size={14} className={cn('text-fog-2 transition-transform duration-200', !open && '-rotate-90')} />
-      )}
-    </>
-  )
+export function Card({ tone = 'tile', className, children, style }: { tone?: CardTone; className?: string; children: ReactNode; style?: CSSProperties }) {
   return (
-    <section className="flex flex-col">
-      <div className="flex h-8 items-center gap-2 px-3">
-        {collapsible ? (
-          <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex items-center gap-2 rounded-md">
-            {head}
-          </button>
-        ) : (
-          head
-        )}
-        {action && <div className="ml-auto">{action}</div>}
-      </div>
-      {(!collapsible || open) && <div className="flex flex-col">{children}</div>}
+    <section className={cn('relative animate-fade-up overflow-hidden rounded-card p-6', cardTone[tone], className)} style={style}>
+      {children}
     </section>
   )
 }
 
-/* ───────────── ListRow ───────────── */
-export function ListRow({
+/** Заголовок списку 22px/800 з тихою цифрою */
+export function ListTitle({
+  children,
+  count,
+  collapsible,
+  open = true,
+  onToggle,
+}: {
+  children: ReactNode
+  count?: ReactNode
+  collapsible?: boolean
+  open?: boolean
+  onToggle?: () => void
+}) {
+  const inner = (
+    <>
+      {children}
+      {count !== undefined && <span className="text-[15px] font-bold text-muted tabular-nums">{count}</span>}
+      {collapsible && <Icon name="chevronDown" size={18} className={cn('text-muted transition-transform duration-200', !open && '-rotate-90')} />}
+    </>
+  )
+  return (
+    <h2 className="mt-4 mb-1 ml-2 flex items-center gap-2.5 text-[22px] font-extrabold tracking-[-0.02em]">
+      {collapsible ? (
+        <button onClick={onToggle} aria-expanded={open} className="flex items-center gap-2.5 rounded-full">
+          {inner}
+        </button>
+      ) : (
+        inner
+      )}
+    </h2>
+  )
+}
+
+/** Група зі згортанням: заголовок і рядки */
+export function ListSection({
+  title,
+  count,
+  collapsible,
+  defaultOpen = true,
+  first,
+  children,
+}: {
+  title: string
+  count?: ReactNode
+  collapsible?: boolean
+  defaultOpen?: boolean
+  /** Перша група на сторінці — без верхнього відступу */
+  first?: boolean
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <section className={cn('flex flex-col gap-2', first && '[&>h2]:mt-0')}>
+      <ListTitle count={count} collapsible={collapsible} open={open} onToggle={() => setOpen((o) => !o)}>
+        {title}
+      </ListTitle>
+      {(!collapsible || open) && children}
+    </section>
+  )
+}
+
+/* ───────────── Рядок задачі ───────────── */
+/** Капсула 60px з тонкою обвідкою tile; дії з'являються при наведенні */
+export function PulseRow({
   leading,
   title,
   sub,
   meta,
   actions,
   onClick,
+  done,
   selected,
   muted,
-  struck,
 }: {
   leading?: ReactNode
   title: ReactNode
   sub?: ReactNode
   meta?: ReactNode
-  /** Дії з'являються при наведенні або фокусі всередині рядка */
   actions?: ReactNode
   onClick?: () => void
+  done?: boolean
   selected?: boolean
   muted?: boolean
-  struck?: boolean
 }) {
   return (
     <div
       className={cn(
-        'group relative flex min-h-11 animate-row-in items-center gap-3 rounded-row px-3 transition-colors duration-150',
-        selected ? 'bg-graphite' : 'hover:bg-hover',
+        'group flex min-h-[60px] animate-row-in items-center gap-3.5 rounded-[30px] pr-4 pl-3.5 transition-colors duration-150',
+        selected ? 'bg-steel' : 'shadow-[inset_0_0_0_1px_var(--color-tile)] hover:bg-tile',
         onClick && 'cursor-pointer',
       )}
       onClick={onClick}
@@ -254,17 +354,11 @@ export function ListRow({
           {leading}
         </div>
       )}
-      <div className="min-w-0 flex-1 py-2.5">
-        <div
-          className={cn(
-            'truncate text-[15px] leading-snug font-medium',
-            muted && 'text-fog',
-            struck && 'text-fog line-through decoration-fog-2/60',
-          )}
-        >
+      <div className="min-w-0 flex-1 py-3">
+        <div className={cn('truncate text-[15px] font-semibold text-white', muted && 'text-grey', done && 'text-muted line-through decoration-violet decoration-2')}>
           {title}
         </div>
-        {sub && <div className="mt-0.5 truncate text-[13px] font-medium text-fog">{sub}</div>}
+        {sub && <div className="mt-0.5 truncate text-[13px] font-semibold text-muted">{sub}</div>}
       </div>
       {actions && (
         <div
@@ -275,7 +369,7 @@ export function ListRow({
         </div>
       )}
       {meta && (
-        <div className="flex shrink-0 items-center gap-2 text-[13px] font-semibold text-fog" onClick={(e) => e.stopPropagation()}>
+        <div className="flex shrink-0 items-center gap-2 text-[13px] font-semibold text-muted" onClick={(e) => e.stopPropagation()}>
           {meta}
         </div>
       )}
@@ -283,8 +377,8 @@ export function ListRow({
   )
 }
 
-/* ───────────── RowCheck ───────────── */
-export function RowCheck({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+/** Кругла галочка 32px: порожня — обвідка steel, виконано — paper */
+export function CheckCircle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <button
       role="checkbox"
@@ -292,50 +386,76 @@ export function RowCheck({ checked, onChange, label }: { checked: boolean; onCha
       aria-label={label}
       onClick={() => onChange(!checked)}
       className={cn(
-        'grid size-[22px] place-items-center rounded-[7px] transition-[background-color,box-shadow,transform] duration-200 active:scale-90',
-        checked ? 'animate-check-pop bg-pulse text-night' : 'text-transparent ring-2 ring-steel ring-inset hover:ring-fog hover:text-fog-2',
+        'grid size-8 place-items-center rounded-full transition-[background-color,box-shadow,color] duration-200 active:scale-90',
+        checked
+          ? 'animate-check-pop bg-paper text-ink'
+          : 'text-transparent shadow-[inset_0_0_0_2px_var(--color-steel)] hover:text-muted hover:shadow-[inset_0_0_0_2px_var(--color-paper)]',
       )}
     >
-      <Icon name="check" size={14} strokeWidth={3} />
+      <Icon name="check" size={16} strokeWidth={3} />
     </button>
   )
 }
 
-/* ───────────── RowAction ───────────── */
-export function RowAction({
-  icon,
-  label,
-  onClick,
-  tone = 'ghost',
-}: {
-  icon: IconName
-  label: string
-  onClick: () => void
-  tone?: 'ghost' | 'danger'
-}) {
+export function RowAction({ icon, label, onClick, tone = 'ghost' }: { icon: IconName; label: string; onClick: () => void; tone?: 'ghost' | 'danger' }) {
   return (
     <button
       onClick={onClick}
       aria-label={label}
-      title={label}
+      data-tip={label}
       className={cn(
-        'grid size-8 place-items-center rounded-full text-fog transition-colors duration-150 active:scale-90',
-        tone === 'danger' ? 'hover:bg-signal/15 hover:text-signal' : 'hover:bg-white/10 hover:text-paper',
+        'grid h-11 w-9 place-items-center rounded-full text-muted transition-colors duration-150 hover:bg-tile hover:text-paper',
+        tone === 'danger' && 'hover:text-danger-text',
       )}
     >
-      <Icon name={icon} size={16} />
+      <Icon name={icon} size={17} />
     </button>
   )
 }
 
-/* ───────────── CycleChip ───────────── */
+/* ───────────── Чипи ───────────── */
+export type PulseChipTone = 'canvas' | 'steel' | 'growth' | 'data' | 'behind' | 'paper' | 'tile' | 'outline'
+const chipTone: Record<PulseChipTone, string> = {
+  canvas: 'bg-canvas text-white',
+  steel: 'bg-steel text-white',
+  growth: 'bg-growth text-ink',
+  data: 'bg-data text-white',
+  behind: 'bg-behind text-ink',
+  paper: 'bg-paper text-ink',
+  tile: 'bg-tile text-soft',
+  outline: 'text-muted shadow-[inset_0_0_0_1px_var(--color-steel)]',
+}
+
+/** Чип 30px: стан або надзаголовок картки (з крапкою кольору змісту) */
+export function PulseChip({
+  tone = 'canvas',
+  dot,
+  icon,
+  children,
+  className,
+}: {
+  tone?: PulseChipTone
+  dot?: string
+  icon?: IconName
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <span className={cn('inline-flex h-[30px] items-center gap-2 rounded-chip px-3 text-[13px] font-extrabold whitespace-nowrap', chipTone[tone], className)}>
+      {dot && <span className="size-2 rounded-full" style={{ background: dot }} />}
+      {icon && <Icon name={icon} size={14} />}
+      {children}
+    </span>
+  )
+}
+
 export interface ChipOption<T extends string> {
   value: T
   label: string
   icon: IconName
 }
 
-/** Один клік перемикає на наступний варіант — менше кроків, ніж випадний список */
+/** Чип, що одним кліком перемикає на наступний варіант */
 export function CycleChip<T extends string>({
   value,
   options,
@@ -349,37 +469,53 @@ export function CycleChip<T extends string>({
 }) {
   const i = Math.max(0, options.findIndex((o) => o.value === value))
   const cur = options[i]
-  const empty = i === 0
   return (
     <button
       onClick={() => onChange(options[(i + 1) % options.length].value)}
       aria-label={`${label}: ${cur.label}. Натисніть, щоб змінити`}
-      title={label}
+      data-tip={label}
       className={cn(
-        'inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-bold transition-colors duration-150 active:scale-95',
-        empty ? 'text-fog-2 ring-1 ring-white/10 ring-inset hover:text-paper hover:ring-white/25' : 'bg-steel/70 text-paper hover:bg-steel',
+        'inline-flex h-[30px] items-center gap-1.5 rounded-chip px-3 text-[13px] font-extrabold transition-colors duration-150 active:scale-95',
+        i === 0 ? 'text-muted shadow-[inset_0_0_0_1px_var(--color-steel)] hover:text-paper' : 'bg-canvas text-white hover:bg-steel',
       )}
     >
-      <Icon name={cur.icon} size={13} />
+      <Icon name={cur.icon} size={14} />
       {cur.label}
     </button>
   )
 }
 
-/* ───────────── ChipGroup ───────────── */
-export function ChipGroup<T extends string>({
+/* ───────────── Перемикачі ───────────── */
+/** Перемикач Pulse: група на tile, вкладки 40px, вибрана — paper */
+export function SegTabs<T extends string>({
   value,
   options,
   onChange,
   label,
+  surface = 'tile',
+  compact,
 }: {
   value: T
-  options: ChipOption<T>[]
+  options: { value: T; label: string; icon?: IconName }[]
   onChange: (v: T) => void
   label: string
+  surface?: 'tile' | 'canvas'
+  /** Вужчі вкладки, щоб 4 варіанти вмістились у колонку 400px */
+  compact?: boolean
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2">
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className={cn('flex w-fit max-w-full flex-wrap gap-1 rounded-[26px] p-1', surface === 'tile' ? 'bg-tile' : 'bg-canvas')}
+      onKeyDown={(e) => {
+        const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+        if (!dir) return
+        e.preventDefault()
+        const i = options.findIndex((o) => o.value === value)
+        onChange(options[(i + dir + options.length) % options.length].value)
+      }}
+    >
       {options.map((o) => {
         const on = o.value === value
         return (
@@ -387,13 +523,15 @@ export function ChipGroup<T extends string>({
             key={o.value}
             role="radio"
             aria-checked={on}
+            tabIndex={on ? 0 : -1}
             onClick={() => onChange(o.value)}
             className={cn(
-              'inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-[13px] font-bold transition-colors duration-150 active:scale-95',
-              on ? 'bg-paper text-night' : 'bg-graphite text-fog hover:text-paper',
+              'inline-flex h-10 items-center gap-1.5 rounded-control text-[14px] transition-colors duration-150',
+              compact ? 'px-3.5' : 'px-[18px]',
+              on ? 'bg-paper font-extrabold text-ink' : 'font-bold text-soft hover:text-white',
             )}
           >
-            <Icon name={o.icon} size={15} />
+            {o.icon && <Icon name={o.icon} size={15} />}
             {o.label}
           </button>
         )
@@ -402,176 +540,153 @@ export function ChipGroup<T extends string>({
   )
 }
 
-/* ───────────── Banner ───────────── */
-/** Контекстна стрічка: одна думка, одна дія */
-export function Banner({
-  icon,
-  title,
-  text,
-  action,
-  tone = 'graphite',
-}: {
-  icon: IconName
-  title: string
-  text?: ReactNode
-  action?: ReactNode
-  tone?: 'graphite' | 'volt'
-}) {
+/** Перемикач 56×32: увімкнено — growth */
+export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <div
-      className={cn(
-        'flex animate-fade-up items-center gap-4 rounded-field p-3 pl-4',
-        tone === 'volt' ? 'bg-volt text-white' : 'bg-graphite',
-      )}
+    <button
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={cn('relative h-8 w-14 shrink-0 rounded-2xl transition-colors duration-200', checked ? 'bg-growth' : 'bg-steel')}
     >
       <span
         className={cn(
-          'grid size-9 shrink-0 place-items-center rounded-full',
-          tone === 'volt' ? 'bg-white/15' : 'bg-steel/70',
+          'absolute top-1 left-1 size-6 rounded-xl transition-[transform,background-color] duration-[250ms] ease-pulse',
+          checked ? 'translate-x-6 bg-canvas' : 'bg-grey',
         )}
-      >
-        <Icon name={icon} size={18} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-[15px] font-bold tracking-tight">{title}</div>
-        {text && <div className={cn('text-[13px] font-medium', tone === 'volt' ? 'text-white/75' : 'text-fog')}>{text}</div>}
-      </div>
-      {action && <div className="shrink-0">{action}</div>}
-    </div>
-  )
-}
-
-/* ───────────── EmptyState ───────────── */
-export function EmptyState({ icon, title, text, children }: { icon: IconName; title: string; text?: ReactNode; children?: ReactNode }) {
-  return (
-    <div className="flex animate-fade-up flex-col items-center px-6 py-12 text-center">
-      <span className="grid size-14 place-items-center rounded-full bg-graphite text-fog">
-        <Icon name={icon} size={24} />
-      </span>
-      <h3 className="mt-4 text-[17px] font-bold tracking-tight">{title}</h3>
-      {text && <p className="mt-1.5 max-w-sm text-[14px] font-medium text-fog">{text}</p>}
-      {children && <div className="mt-5">{children}</div>}
-    </div>
-  )
-}
-
-/* ───────────── SyncDot ───────────── */
-export type SyncState = 'local' | 'synced' | 'syncing' | 'offline' | 'error'
-const syncMap: Record<SyncState, { label: string; dot: string; icon: IconName }> = {
-  local: { label: 'Лише на цьому ПК', dot: 'bg-fog-2', icon: 'cloudOff' },
-  synced: { label: 'Синхронізовано', dot: 'bg-pulse', icon: 'cloud' },
-  syncing: { label: 'Синхронізую…', dot: 'bg-volt-glow animate-pulse', icon: 'refresh' },
-  offline: { label: 'Офлайн — збережено локально', dot: 'bg-fog', icon: 'cloudOff' },
-  error: { label: 'Помилка синхронізації', dot: 'bg-signal', icon: 'cloudOff' },
-}
-
-export function SyncDot({ state }: { state: SyncState }) {
-  const s = syncMap[state]
-  return (
-    <span className="relative inline-grid size-2 place-items-center" title={s.label} aria-label={s.label} role="img">
-      <span className={cn('size-2 rounded-full', s.dot)} />
-    </span>
-  )
-}
-export const syncLabel = (s: SyncState) => syncMap[s].label
-
-/* ───────────── UpdatePill ───────────── */
-export function UpdatePill({ version, onClick }: { version: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      title={`Встановити версію ${version}`}
-      className="mb-1 flex h-11 animate-pop items-center gap-3 rounded-row bg-pulse px-3 text-left text-[13px] font-bold text-night transition hover:brightness-110 active:scale-[0.98]"
-    >
-      <span className="grid size-7 shrink-0 place-items-center">
-        <Icon name="download" size={16} />
-      </span>
-      <span className="flex-1 leading-tight max-[900px]:hidden">
-        Оновлення готове
-        <span className="block text-[11px] font-semibold text-night/65">Перезапустити</span>
-      </span>
+      />
     </button>
   )
 }
 
-/* ───────────── WeekStrip ───────────── */
+/* ───────────── Штрихування ───────────── */
+/**
+ * Знак частки шляху: риски 2px з нахилом 10° і кроком 9px.
+ * Смуга заповнюється зліва обрізанням за 1,6 с, потім риски біжать на крок за 0,35 с.
+ */
+export function Hatch({ value, color, live = true }: { value: number; color: string; live?: boolean }) {
+  const id = useId().replace(/:/g, '')
+  const [still, setStill] = useState(false)
+  useEffect(() => setStill(matchMedia('(prefers-reduced-motion: reduce)').matches), [])
+  const pct = Math.max(0, Math.min(100, value))
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-y-0 left-0 animate-hatch-fill transition-[width] duration-700 ease-pulse"
+      style={{ width: `${pct}%` }}
+    >
+      <svg width="100%" height="100%" className="block">
+        <defs>
+          <pattern id={id} x="0" width="9" height="40" patternUnits="userSpaceOnUse" patternTransform="rotate(10)">
+            {live && !still && <animate attributeName="x" from="0" to="9" dur="0.35s" repeatCount="indefinite" />}
+            <line x1="1.5" y1="-10" x2="1.5" y2="50" stroke={color} strokeWidth="2" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill={`url(#${id})`} />
+      </svg>
+    </div>
+  )
+}
+
+/** Скляна підкладка над штрихуванням, щоб риски не різали літери */
+export function Glass({ children, className, tone = 'tile' }: { children: ReactNode; className?: string; tone?: 'tile' | 'growth' | 'data' }) {
+  const bg = { tile: 'rgb(31 31 31 / 0.75)', growth: 'rgb(19 242 135 / 0.75)', data: 'rgb(100 8 250 / 0.75)' }[tone]
+  return (
+    <span className={cn('relative rounded-[28px] backdrop-blur-[2.5px]', className)} style={{ background: bg }}>
+      {children}
+    </span>
+  )
+}
+
+/* ───────────── Стани ───────────── */
+/** Порожній стан Pulse: та сама плитка з іншим текстом */
+export function EmptyCard({ icon, title, text, children }: { icon: IconName; title: string; text?: ReactNode; children?: ReactNode }) {
+  return (
+    <div className="flex animate-fade-up flex-col items-center gap-6 rounded-tile bg-tile px-7 py-10 text-center">
+      <span className="grid size-16 place-items-center rounded-full bg-canvas text-grey">
+        <Icon name={icon} size={28} />
+      </span>
+      <div className="max-w-[520px]">
+        <h2 className="text-[28px] leading-[1.15] font-extrabold tracking-[-0.02em]">{title}</h2>
+        {text && <p className="mt-2.5 text-[16px] leading-normal font-medium text-grey">{text}</p>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+/* ───────────── Синхронізація й оновлення ───────────── */
+export type SyncState = 'local' | 'synced' | 'syncing' | 'offline' | 'error'
+const syncMap: Record<SyncState, { label: string; dot: string }> = {
+  local: { label: 'Лише на цьому ПК', dot: 'bg-muted' },
+  synced: { label: 'Синхронізовано', dot: 'bg-growth' },
+  syncing: { label: 'Синхронізую…', dot: 'bg-growth animate-pulse' },
+  offline: { label: 'Офлайн — збережено локально', dot: 'bg-muted' },
+  error: { label: 'Помилка синхронізації', dot: 'bg-behind' },
+}
+
+export function SyncDot({ state }: { state: SyncState }) {
+  return <span role="img" aria-label={syncMap[state].label} className={cn('size-2.5 rounded-full shadow-[0_0_0_3px_var(--color-canvas)]', syncMap[state].dot)} />
+}
+export const syncLabel = (s: SyncState) => syncMap[s].label
+
+export function UpdatePill({ version, onClick }: { version: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      data-tip={`Встановити ${version} і перезапустити`}
+      className="inline-flex h-11 shrink-0 animate-pop items-center gap-2 rounded-full bg-growth px-5 text-[15px] font-extrabold text-ink transition hover:brightness-110 active:scale-[0.97]"
+    >
+      <Icon name="download" size={16} />
+      Оновити
+    </button>
+  )
+}
+
+/* ───────────── Тиждень ───────────── */
+/** Сім днів: висота штрихування — частка від найкращого дня. Зелений — лише сьогодні й лише коли є зроблене. */
 export function WeekStrip({ days }: { days: { label: string; count: number; today?: boolean; future?: boolean }[] }) {
   const max = Math.max(1, ...days.map((d) => d.count))
   return (
-    <div className="grid grid-cols-7 gap-2" role="list" aria-label="Зроблено за тиждень">
-      {days.map((d) => (
+    <div className="grid grid-cols-7 gap-1.5" role="list" aria-label="Зроблено за тиждень">
+      {days.map((d) => {
+        const grew = d.today && d.count > 0
+        return (
         <div
           key={d.label}
           role="listitem"
           aria-label={`${d.label}: ${d.count}`}
-          className={cn('relative flex h-20 flex-col justify-between overflow-hidden rounded-field p-2.5', d.today ? 'bg-steel' : 'bg-graphite')}
+          className={cn(
+            'relative flex h-24 flex-col justify-between overflow-hidden rounded-[22px] p-2.5',
+            grew ? 'bg-growth text-ink' : d.today ? 'bg-steel' : 'bg-canvas',
+          )}
         >
-          <span
-            aria-hidden
-            className="hatch absolute inset-x-0 bottom-0 transition-[height] duration-700 ease-pulse"
-            style={{ height: `${(d.count / max) * 100}%`, ['--hatch' as string]: d.today ? 'rgb(19 242 135 / 0.35)' : 'rgb(255 255 255 / 0.12)' }}
-          />
-          <span className={cn('relative text-[11px] font-bold tracking-[0.08em] uppercase', d.today ? 'text-paper' : 'text-fog')}>
-            {d.label}
-          </span>
-          <span className={cn('relative text-[22px] leading-none font-bold tracking-tight tabular-nums', d.future && 'text-fog-2')}>
+          {d.count > 0 && (
+            <div className="absolute inset-x-0 bottom-0" style={{ height: `${(d.count / max) * 100}%` }}>
+              <Hatch value={100} color={grew ? 'rgb(9 10 10 / 0.35)' : '#3a3a3c'} live={false} />
+            </div>
+          )}
+          <span className={cn('relative text-[12px] font-bold', grew ? 'text-ink' : d.today ? 'text-white' : 'text-muted')}>{d.label}</span>
+          <span className={cn('relative text-[26px] leading-none font-extrabold tracking-[-0.04em] tabular-nums', d.future && 'text-dim')}>
             {d.future ? '·' : d.count}
           </span>
         </div>
-      ))}
-    </div>
-  )
-}
-
-/* ───────────── SettingRow ───────────── */
-export function SettingRow({ icon, title, text, children }: { icon: IconName; title: string; text?: ReactNode; children?: ReactNode }) {
-  return (
-    <div className="flex items-center gap-4 border-b border-line py-4 last:border-0">
-      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-steel/60 text-paper">
-        <Icon name={icon} size={17} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-[15px] font-bold tracking-tight">{title}</div>
-        {text && <div className="text-[13px] font-medium text-fog">{text}</div>}
-      </div>
-      {children && <div className="shrink-0">{children}</div>}
-    </div>
-  )
-}
-
-/* ───────────── InlineChoice ───────────── */
-/** Компактний вибір у рядку списку: 2–3 варіанти, один клік */
-export function InlineChoice<T extends string>({
-  value,
-  options,
-  onChange,
-  label,
-}: {
-  value: T
-  options: ChipOption<T>[]
-  onChange: (v: T) => void
-  label: string
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className="flex shrink-0 gap-1 rounded-full bg-night p-1">
-      {options.map((c) => {
-        const on = value === c.value
-        return (
-          <button
-            key={c.value}
-            role="radio"
-            aria-checked={on}
-            onClick={() => onChange(c.value)}
-            className={cn(
-              'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] font-bold transition-colors',
-              on ? 'bg-paper text-night' : 'text-fog hover:text-paper',
-            )}
-          >
-            <Icon name={c.icon} size={13} />
-            {c.label}
-          </button>
         )
       })}
+    </div>
+  )
+}
+
+/* ───────────── Налаштування ───────────── */
+export function SettingRow({ title, text, children }: { title: string; text?: ReactNode; children?: ReactNode }) {
+  return (
+    <div className="flex min-h-[52px] items-center justify-between gap-3 px-1 py-2">
+      <div className="min-w-0">
+        <div className="text-[16px] font-bold">{title}</div>
+        {text && <div className="mt-0.5 text-[13px] font-semibold text-muted">{text}</div>}
+      </div>
+      {children && <div className="shrink-0">{children}</div>}
     </div>
   )
 }

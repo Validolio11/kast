@@ -49,22 +49,24 @@ export const Tile = forwardRef<HTMLDivElement, TileProps>(function Tile(
 })
 
 /* ───────────── Button ───────────── */
-export type ButtonVariant = 'paper' | 'steel' | 'ghost' | 'pulse' | 'volt' | 'danger' | 'outline'
+export type ButtonVariant = 'paper' | 'canvas' | 'steel' | 'ghost' | 'pulse' | 'volt' | 'danger' | 'outline'
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
 const btnVariant: Record<ButtonVariant, string> = {
-  paper: 'bg-paper text-night hover:bg-white',
-  steel: 'bg-steel text-paper hover:bg-[#4a4a4d]',
-  ghost: 'bg-transparent text-paper hover:bg-white/10',
-  pulse: 'bg-pulse text-night hover:brightness-110 hover:shadow-[0_0_28px_-4px_rgba(19,242,135,0.6)]',
-  volt: 'bg-volt text-white hover:bg-[#7a2cff] hover:shadow-[0_0_28px_-4px_rgba(143,91,255,0.7)]',
-  danger: 'bg-signal text-night hover:brightness-110',
-  outline: 'bg-transparent text-paper border border-white/25 hover:border-paper hover:bg-white/5',
+  // Karkas Pulse: головна — paper, на світлому — canvas, другорядна — steel
+  paper: 'bg-paper text-ink hover:bg-white',
+  canvas: 'bg-canvas text-white hover:bg-tile',
+  steel: 'bg-steel text-white font-bold hover:bg-[#4a4a4d]',
+  ghost: 'bg-transparent text-paper hover:bg-tile',
+  pulse: 'bg-growth text-ink hover:brightness-110',
+  volt: 'bg-data text-white hover:bg-[#7a2cff]',
+  danger: 'bg-behind text-ink hover:brightness-110',
+  outline: 'bg-transparent text-paper shadow-[inset_0_0_0_1px_var(--color-steel)] hover:bg-tile',
 }
 const btnSize: Record<ButtonSize, string> = {
-  sm: 'h-9 px-4 text-[13px] gap-1.5',
-  md: 'h-12 px-6 text-[15px] gap-2',
-  lg: 'h-14 px-8 text-base gap-2.5',
+  sm: 'h-10 px-4 text-[14px] gap-1.5',
+  md: 'h-12 px-5 text-[15px] gap-2',
+  lg: 'h-14 px-6 text-[15px] gap-2.5',
 }
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -88,9 +90,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        'relative inline-flex select-none items-center justify-center rounded-full font-bold tracking-tight whitespace-nowrap',
-        'transition-[transform,background-color,box-shadow,filter,border-color] duration-200 ease-pulse',
-        'active:scale-[0.96] disabled:opacity-40 disabled:active:scale-100',
+        'relative inline-flex select-none items-center justify-center rounded-full font-extrabold whitespace-nowrap',
+        'transition-[transform,background-color,box-shadow,filter] duration-200 ease-pulse',
+        'hover:-translate-y-0.5 active:scale-[0.97] disabled:opacity-40 disabled:hover:translate-y-0 disabled:active:scale-100',
         btnVariant[variant],
         btnSize[size],
         fullWidth && 'w-full',

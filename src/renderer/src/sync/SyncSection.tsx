@@ -12,13 +12,12 @@ export function SyncSection() {
   const [busy, setBusy] = useState(false)
   const toast = useToast()
 
-  if (!supabase)
-    return <SettingRow icon="cloudOff" title="Синхронізація" text="Не налаштована: додайте ключі Supabase у файл .env і перезберіть Kast" />
+  if (!supabase) return <SettingRow title="Лише на цьому ПК" text="Синхронізація ще не налаштована: потрібні ключі Supabase у файлі .env" />
 
   if (email)
     return (
-      <SettingRow icon="cloud" title="Синхронізація" text={`${email} · ${syncLabel(state)}`}>
-        <Button size="sm" variant="ghost" iconLeft="logOut" onClick={() => signOut()}>
+      <SettingRow title={email} text={syncLabel(state)}>
+        <Button size="sm" variant="steel" iconLeft="logOut" onClick={() => signOut()}>
           Вийти
         </Button>
       </SettingRow>
@@ -47,15 +46,14 @@ export function SyncSection() {
   }
 
   return (
-    <div className="border-b border-line py-4 [&>div:first-child]:border-0 [&>div:first-child]:pt-0 [&>div:first-child]:pb-3">
+    <div className="flex flex-col gap-3 pb-2">
       <SettingRow
-        icon="cloud"
-        title="Синхронізація"
-        text={step === 'email' ? 'Увійдіть, щоб задачі були на всіх ваших ПК. Без входу все зберігається тут.' : `Код надіслано на ${address}`}
+        title="На всіх ваших ПК"
+        text={step === 'email' ? 'Увійдіть кодом з пошти. Без входу все зберігається на цьому ПК.' : `Код надіслано на ${address}`}
       />
-      <form onSubmit={submit} className="-mt-1 flex gap-2 pl-13">
-        <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full bg-night px-4 ring-1 ring-white/10 focus-within:ring-2 focus-within:ring-volt-glow">
-          <Icon name={step === 'email' ? 'mail' : 'keyboard'} size={16} className="text-fog" />
+      <form onSubmit={submit} className="flex flex-wrap gap-2">
+        <label className="flex h-12 min-w-0 flex-1 items-center gap-2 rounded-full bg-tile px-4 focus-within:shadow-[inset_0_0_0_2px_var(--color-growth)]">
+          <Icon name={step === 'email' ? 'mail' : 'keyboard'} size={16} className="text-grey" />
           <input
             key={step}
             autoFocus
@@ -66,14 +64,14 @@ export function SyncSection() {
             onChange={(e) => setValue(e.target.value)}
             placeholder={step === 'email' ? 'you@example.com' : '6 цифр з листа'}
             aria-label={step === 'email' ? 'Email' : 'Код з листа'}
-            className="min-w-0 flex-1 bg-transparent text-[14px] font-medium outline-none placeholder:text-fog-2"
+            className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-paper caret-growth outline-none placeholder:text-muted"
           />
         </label>
-        <Button size="sm" type="submit" loading={busy} className="h-10">
+        <Button type="submit" loading={busy}>
           {step === 'email' ? 'Надіслати код' : 'Увійти'}
         </Button>
         {step === 'code' && (
-          <Button size="sm" variant="ghost" className="h-10" onClick={() => setStep('email')}>
+          <Button variant="ghost" onClick={() => setStep('email')}>
             Змінити email
           </Button>
         )}

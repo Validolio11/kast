@@ -59,7 +59,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
       <div
         onClick={onClose}
         aria-hidden
-        className={cn('absolute inset-0 bg-night/70 backdrop-blur-md', state === 'open' ? 'animate-fade-in' : 'animate-fade-out')}
+        className={cn('absolute inset-0 bg-canvas/80 backdrop-blur-sm', state === 'open' ? 'animate-fade-in' : 'animate-fade-out')}
       />
       <div
         ref={ref}
@@ -69,26 +69,32 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         aria-describedby={description ? `${uid}-d` : undefined}
         tabIndex={-1}
         className={cn(
-          'relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-tile bg-graphite shadow-[0_40px_120px_-20px_rgba(0,0,0,1)] ring-1 ring-white/10 outline-none',
-          { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-3xl' }[size],
+          'relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-panel bg-tile shadow-dialog outline-none',
+          { sm: 'max-w-sm', md: 'max-w-xl', lg: 'max-w-3xl' }[size],
           state === 'open' ? 'animate-modal-in' : 'animate-modal-out',
         )}
       >
-        <div className="flex items-start justify-between gap-4 p-6 pb-2 md:p-8 md:pb-2">
+        <div className="flex items-start justify-between gap-4 p-8 pb-2">
           <div>
-            <h2 id={`${uid}-t`} className="text-[22px] leading-tight font-bold tracking-tight">
+            <h2 id={`${uid}-t`} className="text-[30px] leading-[1.05] font-extrabold tracking-[-0.03em]">
               {title}
             </h2>
             {description && (
-              <p id={`${uid}-d`} className="mt-2 text-[15px] text-fog">
+              <p id={`${uid}-d`} className="mt-2 text-[15px] font-semibold text-grey">
                 {description}
               </p>
             )}
           </div>
-          <IconButton icon="x" label="Закрити" tone="steel" onClick={onClose} />
+          <button
+            onClick={onClose}
+            aria-label="Закрити"
+            className="grid size-11 shrink-0 place-items-center rounded-full bg-canvas text-paper transition-colors hover:bg-steel"
+          >
+            <Icon name="x" size={18} />
+          </button>
         </div>
-        {children && <div className="overflow-y-auto px-6 py-4 md:px-8">{children}</div>}
-        {footer && <div className="flex flex-wrap justify-end gap-3 p-6 pt-4 md:p-8 md:pt-4">{footer}</div>}
+        {children && <div className="overflow-y-auto px-8 py-4">{children}</div>}
+        {footer && <div className="flex flex-wrap justify-end gap-2 p-8 pt-4">{footer}</div>}
       </div>
     </div>,
     document.body,

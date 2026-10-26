@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Modal, SettingRow, Stepper, Toggle, useToast } from '@/design-system'
+import { Button, Modal, SettingRow, Stepper, Switch, useToast } from '@/design-system'
 import { prettyHotkey, useSettings, useUpdateState } from '@/lib/hooks'
 import { SyncSection } from '@/sync/SyncSection'
 import type { UpdateState } from '../../../shared/types'
@@ -11,42 +11,60 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
 
   return (
     <Modal open={open} onClose={onClose} title="Налаштування" size="md">
-      <div className="flex flex-col pb-2">
-        <SyncSection />
-        <SettingRow icon="keyboard" title="Швидкий запис" text="Працює з будь-якої програми">
-          <HotkeyInput
-            value={s.hotkey}
-            onChange={(hotkey) => set({ hotkey }).catch((e: Error) => toast({ kind: 'error', title: 'Не вдалося', text: e.message.replace(/^.*Error: /, '') }))}
-          />
-        </SettingRow>
-        <SettingRow icon="moon" title="Вечір починається о" text="Після цього Kast запропонує закрити день">
-          <Stepper size="sm" label="Година вечора" value={s.eveningHour} min={14} max={23} unit=":00" onChange={(eveningHour) => set({ eveningHour })} />
-        </SettingRow>
-        <SettingRow icon="bell" title="Нагадати ввечері" text="Одне сповіщення Windows, не більше">
-          <Toggle showState={false} label="Нагадування ввечері" checked={s.notifyEvening} onChange={(notifyEvening) => set({ notifyEvening })} />
-        </SettingRow>
-        <SettingRow icon="appWindow" title="Запускати з Windows" text="Тихо у треї — гаряча клавіша одразу працює">
-          <Toggle showState={false} label="Запуск з Windows" checked={s.launchAtLogin} onChange={(launchAtLogin) => set({ launchAtLogin })} />
-        </SettingRow>
-        <SettingRow icon="download" title={`Версія ${window.kast?.info.version ?? 'dev'}`} text={updateText(update)}>
-          {update.kind === 'ready' ? (
-            <Button size="sm" variant="pulse" onClick={() => window.kast.updates.install()}>
-              Перезапустити
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="steel"
-              loading={update.kind === 'checking' || update.kind === 'downloading'}
-              disabled={update.kind === 'dev'}
-              onClick={() => window.kast?.updates.check()}
-            >
-              Перевірити
-            </Button>
-          )}
-        </SettingRow>
+      <div className="flex flex-col gap-3 pb-2">
+        <Group title="Синхронізація">
+          <SyncSection />
+        </Group>
+        <Group title="Поведінка">
+          <SettingRow title="Швидкий запис" text="Працює з будь-якої програми">
+            <HotkeyInput
+              value={s.hotkey}
+              onChange={(hotkey) =>
+                set({ hotkey }).catch((e: Error) => toast({ kind: 'error', title: 'Не вдалося', text: e.message.replace(/^.*Error: /, '') }))
+              }
+            />
+          </SettingRow>
+          <SettingRow title="Вечір починається о" text="Тоді Kast запропонує закрити день">
+            <Stepper size="sm" label="Година вечора" value={s.eveningHour} min={14} max={23} unit=":00" onChange={(eveningHour) => set({ eveningHour })} />
+          </SettingRow>
+          <SettingRow title="Нагадати ввечері" text="Одне сповіщення, не більше">
+            <Switch label="Нагадати ввечері" checked={s.notifyEvening} onChange={(notifyEvening) => set({ notifyEvening })} />
+          </SettingRow>
+          <SettingRow title="Запуск разом із Windows" text="Тихо у треї — гаряча клавіша одразу працює">
+            <Switch label="Запуск разом із Windows" checked={s.launchAtLogin} onChange={(launchAtLogin) => set({ launchAtLogin })} />
+          </SettingRow>
+        </Group>
+        <Group title={`Версія ${window.kast?.info.version ?? 'dev'}`}>
+          <SettingRow title="Оновлення" text={updateText(update)}>
+            {update.kind === 'ready' ? (
+              <Button size="sm" variant="pulse" onClick={() => window.kast.updates.install()}>
+                Перезапустити
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="steel"
+                loading={update.kind === 'checking' || update.kind === 'downloading'}
+                disabled={update.kind === 'dev'}
+                onClick={() => window.kast?.updates.check()}
+              >
+                Перевірити
+              </Button>
+            )}
+          </SettingRow>
+        </Group>
       </div>
     </Modal>
+  )
+}
+
+/** Група налаштувань: картка canvas усередині діалогу tile */
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-1 rounded-card bg-canvas px-5 py-4">
+      <h3 className="px-1 pb-1 text-[13px] font-extrabold text-grey">{title}</h3>
+      {children}
+    </section>
   )
 }
 
@@ -82,7 +100,9 @@ const KEY_NAMES: Record<string, string> = {
 
 function toAccelerator(e: React.KeyboardEvent): string | null {
   if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return null
-  const key = KEY_NAMES[e.key] ?? (/^F\d{1,2}$/.test(e.key) ? e.key : e.code.startsWith('Key') ? e.code.slice(3) : e.code.startsWith('Digit') ? e.code.slice(5) : null)
+  const key =
+    KEY_NAMES[e.key] ??
+    (/^F\d{1,2}$/.test(e.key) ? e.key : e.code.startsWith('Key') ? e.code.slice(3) : e.code.startsWith('Digit') ? e.code.slice(5) : null)
   if (!key) return null
   const mods = [e.ctrlKey && 'Control', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Super'].filter(Boolean)
   if (!mods.length) return null
@@ -105,7 +125,11 @@ function HotkeyInput({ value, onChange }: { value: string; onChange: (v: string)
           onChange(acc)
         }
       }}
-      className="h-9 min-w-40 rounded-full bg-night px-4 text-[13px] font-bold text-paper ring-1 ring-white/10 transition hover:ring-white/30 focus:ring-2 focus:ring-volt-glow"
+      className={
+        recording
+          ? 'h-10 min-w-40 rounded-control bg-tile px-4 text-[14px] font-extrabold text-growth shadow-[inset_0_0_0_2px_var(--color-growth)]'
+          : 'h-10 min-w-40 rounded-control bg-tile px-4 text-[14px] font-extrabold text-white transition-colors hover:bg-steel'
+      }
     >
       {recording ? 'Натисніть комбінацію…' : prettyHotkey(value)}
     </button>

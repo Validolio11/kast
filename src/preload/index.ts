@@ -23,6 +23,13 @@ const api: KastApi = {
   },
   notify: (title, body, target) => ipcRenderer.send('notify', title, body, target),
   onNavigate: (cb) => listen<NavTarget>('navigate', cb),
+  window: {
+    minimize: () => ipcRenderer.send('window:minimize'),
+    toggleMaximize: () => ipcRenderer.send('window:toggleMaximize'),
+    close: () => ipcRenderer.send('window:close'),
+    isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+    onMaximized: (cb) => listen<boolean>('window:maximized', cb),
+  },
   capture: {
     hide: () => ipcRenderer.send('capture:hide'),
     onOpen: (cb) => listen<void>('capture:open', cb),

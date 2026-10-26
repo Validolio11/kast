@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { NavButton, NavRail, SyncDot, TitleBar, ToastProvider, UpdatePill, type NavItem } from '@/design-system'
+import { AppHeader, RoundButton, SyncDot, ToastProvider, UpdatePill, WindowControls, type NavTab } from '@/design-system'
 import { useDay, useStatus, useToday } from '@/data/hooks'
 import { sweepStale } from '@/data/tasks'
 import { CloseDay } from '@/flows/CloseDay'
@@ -28,6 +28,7 @@ function Shell() {
   const [focusId, setFocusId] = useState<string | null>(null)
   const [closing, setClosing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [maximized, setMaximized] = useState(false)
   const captureRef = useRef<HTMLInputElement>(null)
   const date = useDayKey()
   const [settings] = useSettings()
@@ -38,6 +39,12 @@ function Shell() {
 
   useEffect(() => {
     startSync()
+  }, [])
+
+  useEffect(() => {
+    if (!window.kast) return
+    window.kast.window.isMaximized().then(setMaximized)
+    return window.kast.window.onMaximized(setMaximized)
   }, [])
 
   // Тихе старіння Вхідних: при старті й щогодини
@@ -68,7 +75,7 @@ function Shell() {
     [go],
   )
 
-  // Гарячі клавіші: Ctrl+1..4 — вкладки, Ctrl+N — поле дії, Ctrl+, — налаштування
+  // Гарячі клавіші: Ctrl+1..4 — вкладки, Ctrl+N — поле запису, Ctrl+, — налаштування
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.altKey) return
@@ -89,50 +96,56 @@ function Shell() {
     return () => window.removeEventListener('keydown', onKey)
   }, [go])
 
-  const openCount = today ? today.main.length + today.small.length : 0
-  const nav: NavItem<Tab>[] = [
-    { id: 'today', label: 'Сьогодні', icon: 'sun', meta: openCount ? String(openCount) : undefined, shortcut: 'Ctrl+1' },
-    { id: 'notebook', label: 'Блокнот', icon: 'notebook', shortcut: 'Ctrl+2' },
-    { id: 'inbox', label: 'Вхідні', icon: 'inbox', meta: inbox?.length ? String(inbox.length) : undefined, shortcut: 'Ctrl+3' },
-    { id: 'done', label: 'Готово', icon: 'check', shortcut: 'Ctrl+4' },
+  const tabs: NavTab<Tab>[] = [
+    { id: 'today', label: 'Сьогодні', count: today ? today.main.length + today.small.length : 0, tip: 'Ctrl + 1' },
+    { id: 'notebook', label: 'Блокнот', tip: 'Ctrl + 2' },
+    { id: 'inbox', label: 'Вхідні', count: inbox?.length, tip: 'Ctrl + 3' },
+    { id: 'done', label: 'Готово', tip: 'Ctrl + 4' },
   ]
 
   const onOpen = (id: string) => setFocusId(id)
 
   return (
-    <div className="flex h-full flex-col bg-night">
-      <TitleBar />
-      <div className="flex min-h-0 flex-1">
-        <NavRail
-          items={nav}
-          active={tab}
-          onSelect={go}
-          footer={
-            <>
-              {update.kind === 'ready' && <UpdatePill version={update.version} onClick={() => window.kast.updates.install()} />}
-              <NavButton
-                icon="settings"
-                label="Налаштування"
-                onClick={() => setSettingsOpen(true)}
-                badge={sync.state !== 'local' && <SyncDot state={sync.state} />}
-              />
-            </>
-          }
-        />
-        <main className="min-w-0 flex-1 overflow-hidden rounded-tl-[20px] border-t border-l border-line bg-[#0c0d0d]">
-          {focusId ? (
-            <Focus id={focusId} onClose={() => setFocusId(null)} />
-          ) : tab === 'today' ? (
-            <Today date={date} eveningHour={settings.eveningHour} captureRef={captureRef} onOpen={onOpen} onCloseDay={() => setClosing(true)} />
-          ) : tab === 'notebook' ? (
-            <Notebook captureRef={captureRef} />
-          ) : tab === 'inbox' ? (
-            <Inbox captureRef={captureRef} hotkey={settings.hotkey} onOpen={onOpen} />
-          ) : (
-            <Done captureRef={captureRef} onOpen={onOpen} />
-          )}
-        </main>
-      </div>
+    <div className="flex h-full flex-col bg-canvas">
+      <AppHeader
+        tabs={tabs}
+        active={tab}
+        onSelect={go}
+        actions={
+          <>
+            {update.kind === 'ready' && <UpdatePill version={update.version} onClick={() => window.kast.updates.install()} />}
+            <RoundButton
+              icon="cog"
+              label="Налаштування"
+              onClick={() => setSettingsOpen(true)}
+              badge={sync.state !== 'local' && <SyncDot state={sync.state} />}
+            />
+          </>
+        }
+        windowControls={
+          window.kast && (
+            <WindowControls
+              maximized={maximized}
+              onMinimize={() => window.kast.window.minimize()}
+              onToggleMaximize={() => window.kast.window.toggleMaximize()}
+              onClose={() => window.kast.window.close()}
+            />
+          )
+        }
+      />
+      <main className="min-h-0 flex-1">
+        {focusId ? (
+          <Focus id={focusId} onClose={() => setFocusId(null)} />
+        ) : tab === 'today' ? (
+          <Today date={date} eveningHour={settings.eveningHour} captureRef={captureRef} onOpen={onOpen} onCloseDay={() => setClosing(true)} />
+        ) : tab === 'notebook' ? (
+          <Notebook captureRef={captureRef} />
+        ) : tab === 'inbox' ? (
+          <Inbox captureRef={captureRef} hotkey={settings.hotkey} onOpen={onOpen} />
+        ) : (
+          <Done captureRef={captureRef} onOpen={onOpen} />
+        )}
+      </main>
       <CloseDay open={closing} onClose={() => setClosing(false)} />
       <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>

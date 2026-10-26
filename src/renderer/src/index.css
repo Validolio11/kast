@@ -8,28 +8,54 @@
 }
 
 @theme static {
-  --color-night: #090a0a;
-  --color-graphite: #1c1c1e;
+  /* Karkas Pulse — токени з дизайн-системи (claude.ai: Karkas Pulse) */
+  --color-canvas: #090a0a;
+  --color-tile: #1f1f1f;
   --color-steel: #3a3a3c;
-  --color-fog: #a1a1a6;
+  --color-hairline: #2c2c2e;
   --color-paper: #f4f4f2;
+  --color-paper-line: #e5e5e3;
+  --color-paper-muted: #48484a;
+  --color-white: #ffffff;
+  --color-growth: #13f287;
+  --color-data: #6408fa;
+  --color-violet: #8442ff;
+  --color-behind: #ff4d4f;
+  --color-danger-text: #ff6b6d;
+  --color-soft: #d1d1d6;
+  --color-grey: #a1a1a6;
+  --color-muted: #8e8e93;
+  --color-dim: #6e6e73;
+  --color-ink: #090a0a;
+
+  /* Старі імена базових компонентів → значення Pulse */
+  --color-night: #090a0a;
+  --color-graphite: #1f1f1f;
+  --color-fog: #a1a1a6;
+  --color-fog-2: #8e8e93;
   --color-pulse: #13f287;
   --color-volt: #6408fa;
-  --color-volt-glow: #8f5bff;
+  --color-volt-glow: #8442ff;
   --color-signal: #ff4d4f;
+  --color-line: #2c2c2e;
+  --color-hover: #1f1f1f;
 
-  /* Щільний шар для робочого інтерфейсу */
-  --color-fog-2: #8e8e93;
-  --color-line: rgb(255 255 255 / 0.08);
-  --color-hover: rgb(255 255 255 / 0.045);
-  --color-rail: #0f1010;
-
-  --radius-field: 20px;
-  --radius-tile: 32px;
+  --radius-chip: 15px;
+  --radius-control: 20px;
+  --radius-button: 28px;
+  --radius-card: 40px;
+  --radius-tile: 44px;
+  --radius-panel: 48px;
+  --radius-field: 28px;
   --radius-capsule: 40px;
-  --radius-row: 12px;
+  --radius-row: 30px;
 
-  --font-sans: 'Inter Variable', 'SF Pro Display', -apple-system, 'Segoe UI Variable', system-ui, sans-serif;
+  --shadow-menu: 0 0 0 1px #2c2c2e, 0 18px 44px rgb(0 0 0 / 0.55);
+  --shadow-popover: 0 0 0 1px #2c2c2e, 0 24px 60px rgb(0 0 0 / 0.6);
+  --shadow-island: 0 30px 80px rgb(0 0 0 / 0.6), inset 0 0 0 1px #2c2c2e;
+  --shadow-dialog: 0 40px 100px rgb(0 0 0 / 0.6);
+
+  --font-sans: 'SF Pro Display', 'Inter Variable', -apple-system, 'Segoe UI', sans-serif;
 
   --ease-pulse: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -54,6 +80,7 @@
   --animate-spin-slow: kp-spin 0.8s linear infinite;
   --animate-float: float 5s ease-in-out infinite;
   --animate-row-in: row-in 260ms var(--ease-pulse) both;
+  --animate-hatch-fill: hatch-fill 1.6s cubic-bezier(0.4, 0, 0.2, 1) 0.3s backwards;
   --animate-check-pop: check-pop 420ms var(--ease-spring) both;
 
   @keyframes pop {
@@ -109,6 +136,10 @@
   @keyframes kp-spin {
     to { transform: rotate(360deg); }
   }
+  @keyframes hatch-fill {
+    from { clip-path: inset(0 100% 0 0); }
+    to { clip-path: inset(0 0 0 0); }
+  }
   @keyframes row-in {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
@@ -138,8 +169,8 @@
     background: var(--color-night);
     color: var(--color-paper);
     font-family: var(--font-sans);
-    font-size: 15px;
-    font-weight: 500;
+    font-size: 16px;
+    font-weight: 600;
     overflow: hidden;
     user-select: none;
     line-height: 1.4;
@@ -152,7 +183,7 @@
     background: transparent;
   }
   :focus-visible {
-    outline: 2px solid var(--color-volt-glow);
+    outline: 2px solid var(--color-growth);
     outline-offset: 3px;
   }
   ::selection {
@@ -170,17 +201,61 @@
   [contenteditable] {
     user-select: text;
   }
-  /* Тонкий, але завжди видимий скролбар: довгі списки легше сканувати */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: rgb(255 255 255 / 0.14) transparent;
+  /* Тонкий, завжди видимий скролбар: довгі списки легше сканувати */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
   }
-  *:hover {
-    scrollbar-color: rgb(255 255 255 / 0.28) transparent;
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-steel);
+    border: 2px solid var(--color-canvas);
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-dim);
   }
 }
 
 @layer components {
+  /* Підказка при наведенні замість підписів на кнопках (правило Pulse) */
+  [data-tip] {
+    position: relative;
+  }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 50%;
+    z-index: 80;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 16px;
+    background: var(--color-paper);
+    color: var(--color-canvas);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 32px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -4px);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 40%);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  [data-tip]:hover::after,
+  [data-tip]:focus-visible::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    transition-delay: 0.35s;
+  }
+  [data-tip='']::after {
+    display: none;
+  }
+
   /* Перетягування вікна за верхню смугу (рамка Windows прихована) */
   .drag {
     -webkit-app-region: drag;

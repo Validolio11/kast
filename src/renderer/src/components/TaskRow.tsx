@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { CycleChip, ListRow, RowCheck, type ChipOption } from '@/design-system'
+import { CheckCircle, CycleChip, PulseRow, type ChipOption } from '@/design-system'
 import type { Task, When } from '@/data/db'
 import { complete, update } from '@/data/tasks'
 
@@ -27,11 +27,11 @@ export function TaskRow({
 }) {
   const done = task.status === 'done'
   return (
-    <ListRow
-      leading={<RowCheck checked={done} onChange={(v) => complete(task.id, v)} label={`Виконано: ${task.title}`} />}
+    <PulseRow
+      leading={<CheckCircle checked={done} onChange={(v) => complete(task.id, v)} label={`Виконано: ${task.title}`} />}
       title={task.title}
       sub={task.firstStep && !done ? `Перший крок: ${task.firstStep}` : undefined}
-      struck={done}
+      done={done}
       muted={muted}
       onClick={() => onOpen(task.id)}
       actions={actions}

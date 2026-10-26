@@ -47,10 +47,12 @@ export function age(ts: number) {
   return fmtShortDay(ts)
 }
 
-/** Українська множина: plural(5, ['запис', 'записи', 'записів']) → «5 записів» */
-export function plural(n: number, [one, few, many]: [string, string, string]) {
+/** Українська множина: pluralWord(5, ['запис', 'записи', 'записів']) → «записів» */
+export function pluralWord(n: number, [one, few, many]: [string, string, string]) {
   const m10 = n % 10
   const m100 = n % 100
-  const word = m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many
-  return `${n} ${word}`
+  return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many
 }
+
+/** plural(5, ['запис', 'записи', 'записів']) → «5 записів» */
+export const plural = (n: number, forms: [string, string, string]) => `${n} ${pluralWord(n, forms)}`

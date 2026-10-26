@@ -37,6 +37,14 @@ export interface KastApi {
   }
   notify(title: string, body: string, target?: NavTarget): void
   onNavigate(cb: (t: NavTarget) => void): () => void
+  window: {
+    minimize(): void
+    toggleMaximize(): void
+    /** Ховає у трей (гаряча клавіша лишається активною) */
+    close(): void
+    isMaximized(): Promise<boolean>
+    onMaximized(cb: (v: boolean) => void): () => void
+  }
   capture: {
     hide(): void
     onOpen(cb: () => void): () => void

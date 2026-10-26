@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { CaptureBar, EmptyState, Kbd, ListGroup, RowAction, useToast } from '@/design-system'
+import { CaptureField, Card, EmptyCard, ListSection, RowAction, useToast } from '@/design-system'
 import { Page } from '@/components/Page'
 import { TaskRow } from '@/components/TaskRow'
 import { WeeklyReview } from '@/flows/WeeklyReview'
 import { useStatus } from '@/data/hooks'
-import { captureToInbox, remove, reviewCandidates, takeToToday, toInbox, toSomeday, update } from '@/data/tasks'
+import { captureToInbox, remove, reviewCandidates, STALE_DAYS, takeToToday, toInbox, toSomeday, update } from '@/data/tasks'
 import type { Task } from '@/data/db'
-import { age, plural } from '@/lib/time'
+import { age, pluralWord } from '@/lib/time'
 import { prettyHotkey } from '@/lib/hooks'
 
 export function Inbox({
@@ -30,6 +30,9 @@ export function Inbox({
   }, [])
 
   const fresh = [...inbox].sort((a, b) => b.inboxAt - a.inboxAt)
+  const oldest = inbox.length ? Math.min(...inbox.map((t) => t.inboxAt)) : null
+  const n = inbox.length
+  const waitWord = pluralWord(n, ['запис чекає', 'записи чекають', 'записів чекають'])
 
   const take = async (id: string) => {
     const p = await takeToToday(id)
@@ -47,73 +50,88 @@ export function Inbox({
 
   return (
     <Page
-      title="Вхідні"
-      subtitle="Усе записане чекає тут. На сьогодні беремо лише 3 головні"
-      meta={plural(inbox.length, ['запис', 'записи', 'записів'])}
-      capture={
-        <CaptureBar
-          ref={captureRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onSubmit={async (v) => {
-            setText('')
-            await captureToInbox(v)
-          }}
-          placeholder="Записати думку, справу, ідею…"
-          hint="Ctrl N"
-          autoFocus
-        />
+      light="Усе"
+      heavy="записане"
+      sub="Звідси беремо лише 3 головні на день"
+      side={
+        <>
+          <CaptureField
+            ref={captureRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onSubmit={async (v) => {
+              setText('')
+              await captureToInbox(v)
+            }}
+            placeholder="Записати думку, справу, ідею…"
+            autoFocus
+          />
+          {n > 0 && (
+          <Card className="flex flex-col gap-2 p-7">
+            <span className="text-[48px] leading-none font-extrabold tracking-[-0.045em] tabular-nums">{n}</span>
+            <span className="text-[14px] font-bold text-grey">
+              {waitWord}
+              {oldest ? ` · найстаріший ${age(oldest)}` : ''}
+            </span>
+            <p className="mt-2 text-[13px] font-semibold text-muted">
+              Записи, що лежать понад {STALE_DAYS} днів, тихо йдуть у «Колись». Нічого не губиться, але й не тисне.
+            </p>
+          </Card>
+          )}
+        </>
       }
-    >
-      {review.length > 0 && <WeeklyReview tasks={review} onDone={() => setReview([])} />}
+      main={
+        <>
+          {review.length > 0 && <WeeklyReview tasks={review} onDone={() => setReview([])} />}
 
-      <ListGroup label="Нові" count={inbox.length}>
-        {fresh.map((t) => (
-          <TaskRow
-            key={t.id}
-            task={t}
-            onOpen={onOpen}
-            meta={<span className="tabular-nums">{age(t.inboxAt)}</span>}
-            actions={
-              <>
-                <RowAction icon="sun" label="На сьогодні" onClick={() => take(t.id)} />
-                <RowAction icon="archive" label="У «Колись»" onClick={() => toSomeday(t.id)} />
-                <RowAction icon="trash" label="Видалити" tone="danger" onClick={() => del(t.id)} />
-              </>
-            }
-          />
-        ))}
-        {loaded && inbox.length === 0 && (
-          <EmptyState
-            icon="inbox"
-            title="Вхідні порожні"
-            text={
-              <>
-                Записуйте все, що спадає на думку, — навіть з інших програм через <Kbd>{prettyHotkey(hotkey)}</Kbd>
-              </>
-            }
-          />
-        )}
-      </ListGroup>
-
-      {someday.length > 0 && (
-        <ListGroup label="Колись" count={someday.length} collapsible defaultOpen={false}>
-          {someday.map((t) => (
-            <TaskRow
-              key={t.id}
-              task={t}
-              onOpen={onOpen}
-              muted
-              actions={
-                <>
-                  <RowAction icon="inbox" label="Повернути у Вхідні" onClick={() => toInbox(t.id)} />
-                  <RowAction icon="trash" label="Видалити" tone="danger" onClick={() => del(t.id)} />
-                </>
-              }
+          {loaded && n === 0 ? (
+            <EmptyCard
+              icon="inbox"
+              title="Вхідні порожні"
+              text={`Записуйте все, що спадає на думку, — навіть з інших програм через ${prettyHotkey(hotkey)}.`}
             />
-          ))}
-        </ListGroup>
-      )}
-    </Page>
+          ) : (
+            n > 0 && (
+              <ListSection title="Нові" count={n} first={!review.length}>
+                {fresh.map((t) => (
+                  <TaskRow
+                    key={t.id}
+                    task={t}
+                    onOpen={onOpen}
+                    meta={<span className="tabular-nums">{age(t.inboxAt)}</span>}
+                    actions={
+                      <>
+                        <RowAction icon="sun" label="На сьогодні" onClick={() => take(t.id)} />
+                        <RowAction icon="archive" label="У «Колись»" onClick={() => toSomeday(t.id)} />
+                        <RowAction icon="trash" label="Видалити" tone="danger" onClick={() => del(t.id)} />
+                      </>
+                    }
+                  />
+                ))}
+              </ListSection>
+            )
+          )}
+
+          {someday.length > 0 && (
+            <ListSection title="Колись" count={someday.length} collapsible defaultOpen={false}>
+              {someday.map((t) => (
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  onOpen={onOpen}
+                  muted
+                  actions={
+                    <>
+                      <RowAction icon="inbox" label="Повернути у Вхідні" onClick={() => toInbox(t.id)} />
+                      <RowAction icon="trash" label="Видалити" tone="danger" onClick={() => del(t.id)} />
+                    </>
+                  }
+                />
+              ))}
+            </ListSection>
+          )}
+        </>
+      }
+    />
   )
 }
