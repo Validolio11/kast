@@ -1,4 +1,5 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, screen, shell, Tray } from 'electron'
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, screen, shell, Tray } from 'electron'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join, normalize } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { AppInfo, NavTarget, Settings } from '../shared/types'
@@ -134,8 +135,12 @@ function toggleCapture() {
   const { x, y, width, height } = display.workArea
   const [w] = capture!.getSize()
   capture!.setPosition(Math.round(x + (width - w) / 2), Math.round(y + height * 0.22))
+  // Windows не віддає фокус вікну з фону: рівень «поверх усього», moveTop і фокус самого вмісту
+  capture!.setAlwaysOnTop(true, 'screen-saver')
   capture!.show()
+  capture!.moveTop()
   capture!.focus()
+  capture!.webContents.focus()
   capture!.webContents.send('capture:open')
 }
 
@@ -212,6 +217,27 @@ function setupIpc() {
   ipcMain.handle('auth:prepare', () => prepareOAuth())
   ipcMain.handle('auth:open', (_e, url: string) => openOAuth(url, () => showMain()))
   ipcMain.on('auth:cancel', () => cancelOAuth())
+
+  // Резервна копія: файл обирає людина через стандартні вікна Windows
+  ipcMain.handle('backup:save', async (_e, json: string, name: string) => {
+    const { canceled, filePath } = await dialog.showSaveDialog(main!, {
+      title: 'Зберегти резервну копію Kast',
+      defaultPath: join(app.getPath('documents'), name),
+      filters: [{ name: 'Резервна копія Kast', extensions: ['json'] }],
+    })
+    if (canceled || !filePath) return null
+    await writeFile(filePath, json, 'utf8')
+    return filePath
+  })
+  ipcMain.handle('backup:open', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(main!, {
+      title: 'Відновити з резервної копії',
+      properties: ['openFile'],
+      filters: [{ name: 'Резервна копія Kast', extensions: ['json'] }],
+    })
+    if (canceled || !filePaths[0]) return null
+    return readFile(filePaths[0], 'utf8')
+  })
   ipcMain.on('window:minimize', () => main?.minimize())
   ipcMain.on('window:toggleMaximize', () => (main?.isMaximized() ? main.unmaximize() : main?.maximize()))
   ipcMain.on('window:close', () => main?.close())

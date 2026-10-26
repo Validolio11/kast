@@ -40,6 +40,12 @@ export interface KastApi {
   }
   notify(title: string, body: string, target?: NavTarget): void
   onNavigate(cb: (t: NavTarget) => void): () => void
+  backup: {
+    /** Вікно «Зберегти як…»; повертає шлях або null, якщо скасовано */
+    save(json: string, name: string): Promise<string | null>
+    /** Вікно «Відкрити…»; повертає текст файлу або null */
+    open(): Promise<string | null>
+  }
   auth: {
     /** Локальна адреса, куди Google поверне після входу */
     prepare(): Promise<string>

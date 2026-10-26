@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppHeader, RoundButton, SyncDot, ToastProvider, UpdatePill, WindowControls, type NavTab } from '@/design-system'
 import { useDay, useStatus, useToday } from '@/data/hooks'
 import { rolloverLeftovers, sweepStale } from '@/data/tasks'
+import { markLegacyQuickNote } from '@/data/notes'
 import { CloseDay } from '@/flows/CloseDay'
 import { Focus } from '@/flows/Focus'
 import { useDayKey, useHour, useSettings, useUpdateState } from '@/lib/hooks'
@@ -54,6 +55,7 @@ function Shell() {
 
   // Тихе старіння Вхідних: при старті й щогодини
   useEffect(() => {
+    markLegacyQuickNote()
     sweepStale()
     const t = setInterval(sweepStale, 60 * 60_000)
     return () => clearInterval(t)

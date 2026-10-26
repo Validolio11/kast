@@ -23,6 +23,10 @@ const api: KastApi = {
   },
   notify: (title, body, target) => ipcRenderer.send('notify', title, body, target),
   onNavigate: (cb) => listen<NavTarget>('navigate', cb),
+  backup: {
+    save: (json, name) => ipcRenderer.invoke('backup:save', json, name),
+    open: () => ipcRenderer.invoke('backup:open'),
+  },
   auth: {
     prepare: () => ipcRenderer.invoke('auth:prepare'),
     open: (url) => ipcRenderer.invoke('auth:open', url),

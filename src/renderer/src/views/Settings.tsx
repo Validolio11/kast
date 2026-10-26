@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button, Modal, SettingRow, Stepper, Switch, useToast } from '@/design-system'
 import { prettyHotkey, useSettings, useUpdateState } from '@/lib/hooks'
 import { SyncSection } from '@/sync/SyncSection'
+import { exportBackup, importBackup } from '@/data/backup'
 import type { UpdateState } from '../../../shared/types'
 
 export function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -16,7 +17,8 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
           <Group title="Синхронізація">
             <SyncSection />
           </Group>
-          <Group title={`Версія ${window.kast?.info.version ?? 'dev'}`}>
+          <Group title={`Дані й версія ${window.kast?.info.version ?? 'dev'}`}>
+            <BackupRow />
             <UpdateRow />
           </Group>
         </div>
@@ -41,6 +43,47 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
         </Group>
       </div>
     </Modal>
+  )
+}
+
+/** Резервна копія у файл і відновлення з нього — незалежно від входу в акаунт */
+function BackupRow() {
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const save = async () => {
+    setBusy(true)
+    try {
+      const { json, name, count } = await exportBackup()
+      const path = await window.kast.backup.save(json, name)
+      if (path) toast({ title: 'Копію збережено', text: `${count} записів · ${path.split(/[\\/]/).pop()}` })
+    } catch (e) {
+      toast({ kind: 'error', title: 'Не вдалося зберегти копію', text: (e as Error).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+  const restore = async () => {
+    try {
+      const text = await window.kast.backup.open()
+      if (text === null) return
+      const r = await importBackup(text)
+      const n = r.tasks + r.notes + r.days
+      toast(n ? { title: 'Відновлено', text: `Задач: ${r.tasks}, нотаток: ${r.notes}` } : { kind: 'info', title: 'Усе вже актуальне', text: 'У файлі немає новіших записів' })
+    } catch (e) {
+      toast({ kind: 'error', title: 'Не вдалося відновити', text: (e as Error).message })
+    }
+  }
+  return (
+    <SettingRow title="Резервна копія" text="Файл з усіма задачами й нотатками">
+      <div className="flex gap-2">
+        <Button size="sm" variant="steel" iconLeft="download" loading={busy} disabled={!window.kast} onClick={save}>
+          Зберегти
+        </Button>
+        <Button size="sm" variant="ghost" disabled={!window.kast} onClick={restore}>
+          Відновити
+        </Button>
+      </div>
+    </SettingRow>
   )
 }
 

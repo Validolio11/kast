@@ -29,6 +29,13 @@ export const removeNote = (id: string) => updateNote(id, { deleted: 1 })
 
 const QUICK_KEY = 'quickNoteId'
 
+/** Нотатка «Швидкі записи», створена до позначки quick, отримує її (одноразово при старті) */
+export async function markLegacyQuickNote() {
+  const id = await getMeta<string | null>(QUICK_KEY, null)
+  const note = id ? await db.notes.get(id) : undefined
+  if (note && !note.quick && !note.deleted) await updateNote(note.id, { quick: 1 })
+}
+
 /** Швидкий запис у блокнот: дописує рядок у закріплену нотатку «Швидкі записи» */
 export async function appendToQuickNote(text: string) {
   // Спершу локальна підказка, далі позначка quick — її приносить синхронізація з інших ПК

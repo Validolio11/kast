@@ -24,6 +24,13 @@ export function Capture() {
     })
   }, [])
 
+  // Якщо вікно отримало фокус пізніше (Windows затримує), поле все одно стає активним
+  useEffect(() => {
+    const onFocus = () => input.current?.focus()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
+
   const hide = () => window.kast?.capture.hide()
 
   const submit = async (e: React.FormEvent) => {

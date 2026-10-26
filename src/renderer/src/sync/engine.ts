@@ -58,6 +58,25 @@ export function useSync() {
 const CURSOR = 'syncCursor'
 const USER = 'syncUser'
 const OVERLAP_MS = 5000
+const PURGED = 'syncPurgedAt'
+/** Скільки тримати позначки видалення: стільки інший ПК може бути офлайн і все одно дізнатися про видалення */
+const TOMBSTONE_DAYS = 30
+const DAY_MS = 86_400_000
+
+/** Раз на добу прибирає старі позначки видалення — і на сервері, і локально (лише вже синхронізовані) */
+async function purgeTombstones() {
+  const last = await getMeta<number>(PURGED, 0)
+  if (Date.now() - last < DAY_MS) return
+  const cutoff = Date.now() - TOMBSTONE_DAYS * DAY_MS
+  const { error } = await supabase!.from('records').delete().eq('deleted', true).lt('updated_at', cutoff)
+  if (error) throw error
+  for (const kind of KINDS) {
+    const { table, key } = tables[kind]
+    const old = ((await table().where('dirty').equals(0).toArray()) as Row[]).filter((r) => r.deleted && r.updatedAt < cutoff)
+    await table().bulkDelete(old.map(key) as never)
+  }
+  await setMeta(PURGED, Date.now())
+}
 
 let session: Session | null = null
 let running = false
@@ -131,6 +150,7 @@ export async function syncNow() {
   try {
     await push(session.user.id)
     await pull()
+    await purgeTombstones().catch((e) => console.warn('purge skipped', e))
     setSnap({ state: 'synced' })
   } catch (e) {
     console.error('sync failed', e)
