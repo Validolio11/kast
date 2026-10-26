@@ -1,0 +1,32 @@
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import type { AppInfo, KastApi, NavTarget, UpdateState } from '../shared/types'
+
+function listen<T>(channel: string, cb: (v: T) => void) {
+  const handler = (_e: IpcRendererEvent, v: T) => cb(v)
+  ipcRenderer.on(channel, handler)
+  return () => {
+    ipcRenderer.removeListener(channel, handler)
+  }
+}
+
+const api: KastApi = {
+  info: ipcRenderer.sendSync('app:info') as AppInfo,
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    set: (patch) => ipcRenderer.invoke('settings:set', patch),
+  },
+  updates: {
+    state: () => ipcRenderer.invoke('update:state'),
+    check: () => ipcRenderer.invoke('update:check'),
+    install: () => ipcRenderer.send('update:install'),
+    onState: (cb) => listen<UpdateState>('update:state', cb),
+  },
+  notify: (title, body, target) => ipcRenderer.send('notify', title, body, target),
+  onNavigate: (cb) => listen<NavTarget>('navigate', cb),
+  capture: {
+    hide: () => ipcRenderer.send('capture:hide'),
+    onOpen: (cb) => listen<void>('capture:open', cb),
+  },
+}
+
+contextBridge.exposeInMainWorld('kast', api)

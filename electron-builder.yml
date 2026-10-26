@@ -1,0 +1,32 @@
+appId: com.kast.app
+productName: Kast
+copyright: Copyright © 2026 Ivan
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**
+  - resources/**
+  - package.json
+asarUnpack:
+  - resources/**
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+  executableName: Kast
+nsis:
+  # Встановлення в один клік, без прав адміністратора і зайвих екранів
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Kast
+  artifactName: Kast-Setup-${version}.${ext}
+  deleteAppDataOnUninstall: false
+publish:
+  provider: github
+  owner: OWNER
+  repo: kast
+  releaseType: release

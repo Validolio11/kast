@@ -1,0 +1,33 @@
+# Новий реліз: оновіть "version" у package.json, потім
+#   git tag v0.1.1 && git push origin v0.1.1
+# Workflow збере інсталятор і опублікує його разом із latest.yml —
+# встановлені копії Kast побачать оновлення протягом 4 годин (або одразу після запуску).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - name: Build and publish
+        run: pnpm release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RENDERER_VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          RENDERER_VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}

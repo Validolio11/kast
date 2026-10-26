@@ -1,0 +1,260 @@
+@import '@fontsource-variable/inter';
+@import 'tailwindcss';
+
+@property --curve-progress {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@theme static {
+  --color-night: #090a0a;
+  --color-graphite: #1c1c1e;
+  --color-steel: #3a3a3c;
+  --color-fog: #a1a1a6;
+  --color-paper: #f4f4f2;
+  --color-pulse: #13f287;
+  --color-volt: #6408fa;
+  --color-volt-glow: #8f5bff;
+  --color-signal: #ff4d4f;
+
+  /* Щільний шар для робочого інтерфейсу */
+  --color-fog-2: #8e8e93;
+  --color-line: rgb(255 255 255 / 0.08);
+  --color-hover: rgb(255 255 255 / 0.045);
+  --color-rail: #0f1010;
+
+  --radius-field: 20px;
+  --radius-tile: 32px;
+  --radius-capsule: 40px;
+  --radius-row: 12px;
+
+  --font-sans: 'Inter Variable', 'SF Pro Display', -apple-system, 'Segoe UI Variable', system-ui, sans-serif;
+
+  --ease-pulse: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-pop: pop 320ms var(--ease-spring) both;
+  --animate-fade-up: fade-up 500ms var(--ease-pulse) both;
+  --animate-fade-in: fade-in 220ms ease-out both;
+  --animate-fade-out: fade-out 180ms ease-in both;
+  --animate-modal-in: modal-in 340ms var(--ease-spring) both;
+  --animate-modal-out: modal-out 180ms ease-in both;
+  --animate-sheet-bottom-in: sheet-bottom-in 380ms var(--ease-pulse) both;
+  --animate-sheet-bottom-out: sheet-bottom-out 220ms ease-in both;
+  --animate-sheet-right-in: sheet-right-in 380ms var(--ease-pulse) both;
+  --animate-sheet-right-out: sheet-right-out 220ms ease-in both;
+  --animate-menu-in: menu-in 220ms var(--ease-pulse) both;
+  --animate-toast-in: toast-in 380ms var(--ease-spring) both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-ping-soft: ping-soft 2s var(--ease-pulse) infinite;
+  --animate-chevrons: chevrons 1.4s ease-in-out infinite;
+  --animate-draw: draw 1.2s var(--ease-pulse) both;
+  --animate-hatch: hatch 1.2s linear infinite;
+  --animate-spin-slow: kp-spin 0.8s linear infinite;
+  --animate-float: float 5s ease-in-out infinite;
+  --animate-row-in: row-in 260ms var(--ease-pulse) both;
+  --animate-check-pop: check-pop 420ms var(--ease-spring) both;
+
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.85); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes modal-in {
+    from { opacity: 0; transform: translateY(24px) scale(0.94); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes modal-out {
+    from { opacity: 1; transform: scale(1); }
+    to { opacity: 0; transform: translateY(12px) scale(0.97); }
+  }
+  @keyframes sheet-bottom-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  @keyframes sheet-bottom-out { from { transform: translateY(0); } to { transform: translateY(100%); } }
+  @keyframes sheet-right-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  @keyframes sheet-right-out { from { transform: translateX(0); } to { transform: translateX(100%); } }
+  @keyframes menu-in {
+    from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(24px) scale(0.9); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+  @keyframes ping-soft {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent); }
+    80%, 100% { box-shadow: 0 0 0 14px transparent; }
+  }
+  @keyframes chevrons {
+    0%, 100% { opacity: 0.25; }
+    50% { opacity: 1; }
+  }
+  @keyframes draw {
+    from { stroke-dashoffset: 1; }
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes hatch {
+    from { background-position: 0 0; }
+    to { background-position: 14px 0; }
+  }
+  @keyframes kp-spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes row-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes check-pop {
+    0% { transform: scale(0.6); box-shadow: 0 0 0 0 rgb(19 242 135 / 0.55); }
+    60% { transform: scale(1.12); }
+    100% { transform: scale(1); box-shadow: 0 0 0 12px rgb(19 242 135 / 0); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  html {
+    background: var(--color-night);
+    color-scheme: dark;
+  }
+  body {
+    background: var(--color-night);
+    color: var(--color-paper);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 500;
+    overflow: hidden;
+    user-select: none;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Вікно швидкого запису прозоре: видно лише капсулу */
+  html:has(body.capture),
+  body.capture {
+    background: transparent;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-volt-glow);
+    outline-offset: 3px;
+  }
+  ::selection {
+    background: var(--color-pulse);
+    color: var(--color-night);
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  input,
+  textarea,
+  [contenteditable] {
+    user-select: text;
+  }
+  /* Тонкий, але завжди видимий скролбар: довгі списки легше сканувати */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 0.14) transparent;
+  }
+  *:hover {
+    scrollbar-color: rgb(255 255 255 / 0.28) transparent;
+  }
+}
+
+@layer components {
+  /* Перетягування вікна за верхню смугу (рамка Windows прихована) */
+  .drag {
+    -webkit-app-region: drag;
+  }
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  /* Діагональний штрих — «частка шляху» */
+  .hatch {
+    overflow: hidden;
+  }
+  .hatch::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: calc(100% + 80px);
+    aspect-ratio: 1;
+    min-height: calc(100% + 80px);
+    background-image: repeating-linear-gradient(
+      90deg,
+      var(--hatch, currentColor) 0 4px,
+      transparent 4px 14px
+    );
+    transform: translate3d(-50%, -50%, 0) rotate(15deg);
+  }
+  .hatch-live::before {
+    animation: hatch 1.2s linear infinite;
+  }
+
+  .pulse-range {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 12px;
+    width: 100%;
+    border-radius: 999px;
+    background: linear-gradient(
+      to right,
+      var(--color-pulse) var(--p, 50%),
+      var(--color-steel) var(--p, 50%)
+    );
+    outline-offset: 6px;
+  }
+  .pulse-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: var(--color-paper);
+    border: 6px solid var(--color-night);
+    box-shadow: 0 0 0 2px var(--color-paper);
+    transition: transform 200ms var(--ease-spring);
+  }
+  .pulse-range:active::-webkit-slider-thumb {
+    transform: scale(1.18);
+  }
+  .pulse-range::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: var(--color-paper);
+    border: 6px solid var(--color-night);
+    box-shadow: 0 0 0 2px var(--color-paper);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
