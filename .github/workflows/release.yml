@@ -25,9 +25,15 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      - name: Build and publish
-        run: pnpm release
+      # Збираємо без публікації: electron-builder вантажить файли паралельно й може створити два релізи
+      - name: Build installer
+        run: pnpm build:win
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RENDERER_VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           RENDERER_VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      # Один реліз з усім, що потрібно автооновленню: інсталятор, blockmap і latest.yml
+      - name: Publish release
+        shell: bash
+        run: gh release create "${{ github.ref_name }}" dist/Kast-Setup-*.exe dist/Kast-Setup-*.exe.blockmap dist/latest.yml --title "Kast ${{ github.ref_name }}" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
