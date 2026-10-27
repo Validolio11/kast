@@ -93,7 +93,17 @@ export interface VideoInfo {
   thumb?: string
   /** Пряме посилання на файл — грає звичайний <video> */
   file?: boolean
+  /** Плеєр не вбудовується в застосунок (Twitch) — відкривається окремим вікном */
+  window?: boolean
+  /** Плеєр не працює в Electron узагалі (Vimeo) — у застосунку відкривається в браузері */
+  browser?: boolean
 }
+
+const inApp = () => location.protocol === 'app:' && !!window.kast
+/** У застосунку (app://) Twitch грає окремим вікном; у браузері — як усі, в тексті */
+export const inOwnWindow = (info: VideoInfo) => !!info.window && inApp()
+/** У застосунку Vimeo відкривається у звичайному браузері (свій плеєр він Electron не віддає) */
+export const inBrowser = (info: VideoInfo) => !!info.browser && inApp()
 
 /** YouTube (зокрема Shorts і live), Vimeo, Twitch (канал, запис, кліп) і прямі .mp4/.webm/.mov */
 export function parseVideo(raw: string): VideoInfo | null {
@@ -121,24 +131,24 @@ export function parseVideo(raw: string): VideoInfo | null {
   }
   if (host === 'vimeo.com' && /^\d+$/.test(path[0] ?? '')) {
     const id = path[0]
-    return { label: 'Vimeo', embed: () => `https://player.vimeo.com/video/${id}?autoplay=1` }
+    return { label: 'Vimeo', browser: true, embed: () => `https://player.vimeo.com/video/${id}?autoplay=1` }
   }
   if (host === 'clips.twitch.tv' && path[0]) {
     const clip = path[0]
-    return { label: 'Twitch', embed: (h) => `https://clips.twitch.tv/embed?clip=${clip}&parent=${h}&autoplay=true` }
+    return { label: 'Twitch', window: true, embed: (h) => `https://clips.twitch.tv/embed?clip=${clip}&parent=${h}&autoplay=true` }
   }
   if (host === 'twitch.tv' && path[0]) {
     if (path[0] === 'videos' && /^\d+$/.test(path[1] ?? '')) {
       const id = path[1]
-      return { label: 'Twitch', embed: (h) => `https://player.twitch.tv/?video=${id}&parent=${h}&autoplay=true` }
+      return { label: 'Twitch', window: true, embed: (h) => `https://player.twitch.tv/?video=${id}&parent=${h}&autoplay=true` }
     }
     if (path[1] === 'clip' && path[2]) {
       const clip = path[2]
-      return { label: 'Twitch', embed: (h) => `https://clips.twitch.tv/embed?clip=${clip}&parent=${h}&autoplay=true` }
+      return { label: 'Twitch', window: true, embed: (h) => `https://clips.twitch.tv/embed?clip=${clip}&parent=${h}&autoplay=true` }
     }
     if (path.length === 1 && /^\w+$/.test(path[0])) {
       const channel = path[0]
-      return { label: 'Twitch', embed: (h) => `https://player.twitch.tv/?channel=${channel}&parent=${h}&autoplay=true` }
+      return { label: 'Twitch', window: true, embed: (h) => `https://player.twitch.tv/?channel=${channel}&parent=${h}&autoplay=true` }
     }
     return null
   }

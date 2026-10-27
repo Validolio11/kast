@@ -29,6 +29,8 @@ let updateReady: string | null = null
 // Налагодження: KAST_CDP=9333 відкриває порт DevTools (знімки вікна, автотести)
 if (process.env.KAST_CDP) app.commandLine.appendSwitch('remote-debugging-port', process.env.KAST_CDP)
 if (!app.requestSingleInstanceLock()) app.quit()
+// Деякі сайти й плеєри відсіюють «Electron» в User-Agent як «непідтримуваний браузер» — показуємося звичайним Chrome
+app.userAgentFallback = app.userAgentFallback.replace(/\s(Electron|kast)\/\S+/gi, '')
 // У розробці запускається electron.exe: окремий ID, щоб Windows не закешувала його значок для встановленого Kast
 app.setAppUserModelId(app.isPackaged ? 'com.kast.app' : 'com.kast.app.dev')
 
@@ -155,6 +157,37 @@ function prettyHotkey(acc: string) {
   return acc.replace('Control', 'Ctrl').replace('CommandOrControl', 'Ctrl')
 }
 
+/**
+ * Twitch не дає вбудовувати плеєр у сторінки app://, тож він відкривається окремим вікном,
+ * де плеєр — сама сторінка (так Twitch дозволяє). Лише адреси плеєрів Twitch.
+ */
+function openVideoWindow(url: string) {
+  let host = ''
+  try {
+    const u = new URL(url)
+    if (u.protocol === 'https:') host = u.hostname
+  } catch {
+    return
+  }
+  if (host !== 'player.twitch.tv' && host !== 'clips.twitch.tv') return
+  const win = new BrowserWindow({
+    width: 1280,
+    height: 760,
+    minWidth: 480,
+    minHeight: 300,
+    title: 'Kast · відео',
+    icon: ICON,
+    backgroundColor: '#090a0a',
+    autoHideMenuBar: true,
+    webPreferences: { sandbox: true, contextIsolation: true },
+  })
+  win.webContents.setWindowOpenHandler(({ url: next }) => {
+    if (/^https?:\/\//i.test(next)) shell.openExternal(next)
+    return { action: 'deny' }
+  })
+  win.loadURL(url)
+}
+
 function registerHotkey(acc: string): boolean {
   globalShortcut.unregisterAll()
   try {
@@ -224,6 +257,7 @@ function setupIpc() {
   })
   ipcMain.on('notify', (_e, title: string, body: string, target?: NavTarget) => notify(title, body, target))
   ipcMain.on('capture:hide', () => capture?.hide())
+  ipcMain.on('video:window', (_e, url: string) => openVideoWindow(url))
   ipcMain.handle('auth:prepare', () => prepareOAuth())
   ipcMain.handle('auth:open', (_e, url: string) => openOAuth(url, () => showMain()))
   ipcMain.on('auth:cancel', () => cancelOAuth())

@@ -461,29 +461,29 @@
     line-height: 32px;
     white-space: nowrap;
     pointer-events: none;
-    opacity: 0;
-    transform: translate(-50%, -4px);
     box-shadow: 0 8px 24px rgb(0 0 0 / 40%);
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    /* Прихована підказка не існує в розкладці — інакше біля краю вікна вона дає горизонтальну прокрутку */
+    display: none;
+    --tip-x: -50%;
   }
   [data-tip]:hover::after,
   [data-tip]:focus-visible::after {
-    opacity: 1;
-    transform: translate(-50%, 0);
-    transition-delay: 0.35s;
+    display: block;
+    animation: tip-in 0.15s ease 0.35s both;
   }
-  [data-tip='']::after {
+  [data-tip='']:hover::after,
+  [data-tip='']:focus-visible::after {
     display: none;
   }
   /* Біля правого краю: підказка вирівнюється по правому краю елемента, щоб не вилазити за вікно */
   [data-tip-align='end']::after {
     left: auto;
     right: 0;
-    transform: translate(0, -4px);
+    --tip-x: 0%;
   }
-  [data-tip-align='end']:hover::after,
-  [data-tip-align='end']:focus-visible::after {
-    transform: translate(0, 0);
+  @keyframes tip-in {
+    from { opacity: 0; transform: translate(var(--tip-x), -4px); }
+    to { opacity: 1; transform: translate(var(--tip-x), 0); }
   }
 
   /* Перетягування вікна за верхню смугу (рамка Windows прихована) */

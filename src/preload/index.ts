@@ -39,6 +39,9 @@ const api: KastApi = {
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
     onMaximized: (cb) => listen<boolean>('window:maximized', cb),
   },
+  video: {
+    window: (url) => ipcRenderer.send('video:window', url),
+  },
   capture: {
     hide: () => ipcRenderer.send('capture:hide'),
     onOpen: (cb) => listen<void>('capture:open', cb),

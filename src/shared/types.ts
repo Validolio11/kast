@@ -61,6 +61,10 @@ export interface KastApi {
     isMaximized(): Promise<boolean>
     onMaximized(cb: (v: boolean) => void): () => void
   }
+  /** Окреме вікно плеєра (для Twitch, який не вбудовується в app://) */
+  video: {
+    window(url: string): void
+  }
   capture: {
     hide(): void
     onOpen(cb: () => void): () => void

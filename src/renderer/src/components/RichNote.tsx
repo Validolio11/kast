@@ -18,6 +18,8 @@ import {
   makeChip,
   makeImage,
   makeLinkChip,
+  inBrowser,
+  inOwnWindow,
   makeVideo,
   parseVideo,
   plainText,
@@ -164,6 +166,9 @@ export const RichNote = forwardRef<RichNoteHandle, {
     const info = parseVideo(box.dataset.url ?? '')
     const frame = box.querySelector('.note-video-frame')
     if (!info || !frame) return
+    // Twitch у застосунку — окремим вікном (вбудовувати в app:// він не дозволяє), Vimeo — у браузері
+    if (inOwnWindow(info)) return window.kast.video.window(info.embed('player.twitch.tv'))
+    if (inBrowser(info)) return void window.open(box.dataset.url, '_blank')
     const player = info.file
       ? `<video src="${encodeURI(box.dataset.url!)}" controls autoplay playsinline></video>`
       : `<iframe src="${info.embed(location.hostname || 'localhost')}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
@@ -174,6 +179,9 @@ export const RichNote = forwardRef<RichNoteHandle, {
   const expandVideo = (box: HTMLElement) => {
     box.classList.remove('is-playing')
     videoCover(box)
+    const info = parseVideo(box.dataset.url ?? '')
+    if (info && inOwnWindow(info)) return window.kast.video.window(info.embed('player.twitch.tv'))
+    if (info && inBrowser(info)) return void window.open(box.dataset.url, '_blank')
     setVideo(box.dataset.url ?? null)
   }
 
