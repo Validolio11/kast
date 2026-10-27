@@ -358,7 +358,6 @@
     border-radius: 50%;
     background: var(--color-paper);
     color: var(--color-ink);
-    padding-left: 3px;
     transition: transform 0.15s ease;
   }
   .note-video:hover .note-video-play {

@@ -14,7 +14,8 @@ const paths = {
   trendingUp: (<><path d="M16 7h6v6" /><path d="m22 7-8.5 8.5-5-5L2 17" /></>),
   trendingDown: (<><path d="M16 17h6v-6" /><path d="m22 17-8.5-8.5-5 5L2 7" /></>),
   bell: (<><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></>),
-  play: <polygon points="6 3 20 12 6 21 6 3" />,
+  // Центр мас трикутника рівно в центрі рамки (12): так ▶ виглядає по центру кнопки
+  play: <polygon points="7.3 3 21.3 12 7.3 21 7.3 3" />,
   pause: (<><rect x="14" y="4" width="4" height="16" rx="1" /><rect x="6" y="4" width="4" height="16" rx="1" /></>),
   calendar: (<><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /></>),
   calendarRange: (<><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4" /><path d="M3 10h18" /><path d="M8 2v4" /><path d="M17 14h-6" /><path d="M13 18H7" /><path d="M7 14h.01" /><path d="M17 18h.01" /></>),
