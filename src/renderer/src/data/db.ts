@@ -20,7 +20,10 @@ export interface Task extends Syncable {
   status: TaskStatus
   kind: TaskKind
   when: When
+  /** Поточний крок — завжди лише один (ковзний: зробили — питаємо наступний) */
   firstStep: string
+  /** Скільки кроків уже зроблено в цій задачі */
+  stepsDone?: number
   order: number
   /** День, на який задача запланована (YYYY-MM-DD) */
   planDate: string | null

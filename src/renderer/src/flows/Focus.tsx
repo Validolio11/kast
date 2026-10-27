@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Card, cn, Icon, PageGrid, PulseChip, RoundButton, SegTabs, useToast } from '@/design-system'
+import { Button, Card, CheckCircle, cn, Icon, PageGrid, PulseChip, RoundButton, SegTabs, useToast } from '@/design-system'
 import { WHEN_OPTIONS } from '@/components/TaskRow'
 import { useEntering } from '@/components/Page'
 import { useTask } from '@/data/hooks'
-import { complete, remove, setKind, takeToToday, toInbox, update } from '@/data/tasks'
+import { complete, finishStep, remove, setKind, takeToToday, toInbox, update } from '@/data/tasks'
 import type { Task, TaskKind, TaskStatus, When } from '@/data/db'
 
 const KIND_OPTIONS: { value: TaskKind; label: string }[] = [
@@ -126,16 +126,7 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
           }
           main={
             <>
-              <Card className="flex flex-col gap-3 p-7">
-                <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">Перший крок</h2>
-                <Field
-                  value={task.firstStep}
-                  onSave={(firstStep) => update(task.id, { firstStep: firstStep.trim() })}
-                  placeholder="Найменша фізична дія: відкрити файл, написати одне речення…"
-                  className="h-14 rounded-full bg-canvas px-5 text-[16px] font-semibold text-paper placeholder:text-muted focus:shadow-[inset_0_0_0_2px_var(--color-growth)]"
-                />
-                <p className="px-1 text-[13px] font-semibold text-muted">Розмите відкладається, конкретне — робиться.</p>
-              </Card>
+              <StepCard task={task} />
               <section className="flex min-h-[320px] flex-col rounded-panel bg-paper p-8 text-ink">
                 <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">Нотатки</h2>
                 <Field
@@ -154,6 +145,47 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
   )
 }
 
+/**
+ * Ковзний крок: на екрані завжди один конкретний крок. Відмітили — поле звільняється
+ * з питанням «А наступний крок?», а лічильник тихо показує, скільки вже пройдено.
+ */
+function StepCard({ task }: { task: Task }) {
+  const toast = useToast()
+  const [celebrate, setCelebrate] = useState(false)
+  const [round, setRound] = useState(0)
+  const steps = task.stepsDone ?? 0
+  const done = async () => {
+    const undo = await finishStep(task.id)
+    if (!undo) return
+    setCelebrate(true)
+    setTimeout(() => setCelebrate(false), 700)
+    setRound((r) => r + 1)
+    toast({ title: 'Крок зроблено', action: { label: 'Скасувати', onClick: () => undo() } })
+  }
+  return (
+    <Card className="flex flex-col gap-3 p-7">
+      <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">{steps ? 'Наступний крок' : 'Перший крок'}</h2>
+      <div className="flex items-center gap-3">
+        <Field
+          value={task.firstStep}
+          onSave={(firstStep) => update(task.id, { firstStep: firstStep.trim() })}
+          placeholder={steps ? 'А наступний крок?' : 'Найменша фізична дія: відкрити файл, написати одне речення…'}
+          focusKey={round}
+          className="h-14 rounded-full bg-canvas px-5 text-[16px] font-semibold text-paper placeholder:text-muted focus:shadow-[inset_0_0_0_2px_var(--color-growth)]"
+        />
+        {(task.firstStep || celebrate) && (
+          <div data-tip="Крок зроблено" className="shrink-0">
+            <CheckCircle checked={celebrate} onChange={(v) => v && done()} label={`Крок зроблено: ${task.firstStep}`} />
+          </div>
+        )}
+      </div>
+      <p className="px-1 text-[13px] font-semibold text-muted">
+        {steps ? `Кроків зроблено: ${steps}` : 'Розмите відкладається, конкретне — робиться.'}
+      </p>
+    </Card>
+  )
+}
+
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-2.5">
@@ -169,15 +201,22 @@ function Field({
   onSave,
   placeholder,
   multiline,
+  focusKey,
   className,
 }: {
   value: string
   onSave: (v: string) => void
   placeholder?: string
   multiline?: boolean
+  /** Зміна значення переводить фокус у поле (наприклад, після «Крок зроблено») */
+  focusKey?: number
   className?: string
 }) {
   const [v, setV] = useState(value)
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (focusKey) inputRef.current?.focus()
+  }, [focusKey])
   useEffect(() => setV(value), [value])
   const save = () => v !== value && onSave(v)
   // Вихід через Esc чи гарячу клавішу не викликає blur — зберігаємо незбережене при закритті
@@ -194,6 +233,7 @@ function Field({
   if (multiline) return <textarea value={v} onChange={(e) => setV(e.target.value)} onBlur={save} placeholder={placeholder} className={cn(cls, 'resize-none')} />
   return (
     <input
+      ref={inputRef}
       value={v}
       onChange={(e) => setV(e.target.value)}
       onBlur={save}

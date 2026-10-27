@@ -41,6 +41,15 @@ function newTask(title: string, patch: Partial<Task> = {}): Task {
 
 export const update = (id: string, patch: Partial<Task>) => db.tasks.update(id, touch(patch))
 
+/** Ковзний крок: поточний зроблено — поле звільняється під наступний, лічильник +1. Повертає скасування. */
+export async function finishStep(id: string) {
+  const t = await db.tasks.get(id)
+  if (!t?.firstStep.trim()) return undefined
+  const before = { firstStep: t.firstStep, stepsDone: t.stepsDone ?? 0 }
+  await update(id, { firstStep: '', stepsDone: before.stepsDone + 1 })
+  return () => update(id, before)
+}
+
 /* ───────── Запис ───────── */
 
 export async function captureToInbox(title: string, patch: Partial<Task> = {}) {

@@ -68,7 +68,7 @@ export function TaskRow({
     <PulseRow
       leading={<CheckCircle checked={done || finishing} onChange={toggle} label={`Виконано: ${task.title}`} />}
       title={task.title}
-      sub={task.firstStep && !done ? `Перший крок: ${task.firstStep}` : undefined}
+      sub={task.firstStep && !done ? `${task.stepsDone ? 'Наступний крок' : 'Перший крок'}: ${task.firstStep}` : undefined}
       done={done}
       finishing={finishing}
       muted={muted}

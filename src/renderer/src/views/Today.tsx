@@ -83,7 +83,7 @@ export function Today({
               <div className="flex items-end gap-4">
                 <div className="min-w-0 flex-1">
                   <h2 className="text-[44px] leading-[0.95] font-extrabold tracking-[-0.04em] break-words">{now.title}</h2>
-                  {now.firstStep && <p className="mt-3 text-[15px] font-semibold text-paper-muted">Перший крок: {now.firstStep}</p>}
+                  {now.firstStep && <p className="mt-3 text-[15px] font-semibold text-paper-muted">{now.stepsDone ? 'Наступний крок' : 'Перший крок'}: {now.firstStep}</p>}
                 </div>
                 <button
                   onClick={() => onOpen(now.id)}
