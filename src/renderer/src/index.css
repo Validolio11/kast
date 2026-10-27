@@ -82,6 +82,8 @@
   /* Єдиний рух появи Pulse: знизу на 16px за 0,6 с */
   --animate-enter: enter 600ms var(--ease-pulse) backwards;
   --animate-hatch-fill: hatch-fill 1.6s cubic-bezier(0.4, 0, 0.2, 1) 0.3s backwards;
+  /* Прогрес-капсула розтягується від мінімальної ширини (--grow-from) до своєї */
+  --animate-grow-in: grow-in 1.1s var(--ease-pulse) 0.3s backwards;
   --animate-check-pop: check-pop 420ms var(--ease-spring) both;
 
   @keyframes pop {
@@ -136,6 +138,9 @@
   }
   @keyframes kp-spin {
     to { transform: rotate(360deg); }
+  }
+  @keyframes grow-in {
+    from { width: var(--grow-from, 0px); }
   }
   @keyframes hatch-fill {
     from { clip-path: inset(0 100% 0 0); }

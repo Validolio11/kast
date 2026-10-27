@@ -312,10 +312,11 @@ function ToastView({ item, onDone }: { item: ToastItem; onDone: () => void }) {
       >
         <Icon name="x" size={16} />
       </button>
+      {/* Відлік — та сама капсула з відступом, що й усі прогрес-лінії */}
       <span
         aria-hidden
-        className="absolute bottom-0 left-0 h-1"
-        style={{ width: `${(1 - elapsed / item.ms) * 100}%`, background: s.bar }}
+        className="absolute bottom-1.5 left-8 h-1 rounded-full"
+        style={{ width: `calc((100% - 64px) * ${Math.max(0, 1 - elapsed / item.ms)})`, background: s.bar }}
       />
     </div>
   )

@@ -389,7 +389,7 @@ export function PulseRow({
 }
 
 /**
- * Шкала старіння: маленька заокруглена капсула з зеленою штриховкою Hatch.
+ * Шкала старіння: маленька доріжка, у ній зелена капсула з відступом (стиль усіх прогрес-ліній Kast).
  * Заповнюється з віком задачі; останні дні перед «Колись» штрихи рухаються. Без червоного «прострочено».
  */
 function AgeScale({ value, tip }: { value: number; tip: string }) {
@@ -397,7 +397,12 @@ function AgeScale({ value, tip }: { value: number; tip: string }) {
   return (
     <span role="img" aria-label={tip} data-tip={tip} data-tip-align="end" className="mr-1 grid h-[30px] items-center">
       <span className="relative block h-3 w-20 overflow-hidden rounded-full bg-white/[0.06]">
-        {v > 0 && <Hatch value={Math.max(v, 0.08) * 100} color="var(--color-growth)" live={v >= 0.85} />}
+        {v > 0 && (
+          <span
+            className={cn('absolute inset-y-[2px] left-[2px] animate-grow-in rounded-full bg-growth transition-[width] duration-700 ease-pulse [--grow-from:8px]', v >= 0.85 && 'animate-[grow-in_1.1s_var(--ease-pulse)_0.3s_backwards,pulse_2s_cubic-bezier(0.4,0,0.6,1)_1.4s_infinite]')}
+            style={{ width: `max(8px, calc((100% - 4px) * ${v}))` }}
+          />
+        )}
         {/* Обводка окремим шаром над штриховкою, щоб не ховалась під заповненням */}
         <span aria-hidden className="pointer-events-none absolute inset-0 rounded-full shadow-[inset_0_0_0_1px_rgb(255_255_255/0.18)]" />
       </span>
@@ -661,11 +666,12 @@ export function InfoRow({
         tone === 'accent' ? 'shadow-[inset_0_0_0_1px_var(--color-growth)]' : 'shadow-[inset_0_0_0_1px_var(--color-tile)]',
       )}
     >
+      {/* Прогрес — капсула всередині рядка з відступом 6px; не вужча за власну висоту */}
       {filled && (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-0 animate-hatch-fill bg-data transition-[width] duration-700 ease-pulse"
-          style={{ width: `${Math.min(100, progress)}%` }}
+          className="pointer-events-none absolute inset-y-1.5 left-1.5 animate-grow-in rounded-[24px] bg-data transition-[width] duration-700 ease-pulse [--grow-from:48px]"
+          style={{ width: `max(48px, calc((100% - 12px) * ${Math.min(100, progress) / 100}))` }}
         />
       )}
       <Icon name={icon} size={18} className={cn('relative shrink-0', tone === 'accent' ? 'text-growth' : filled ? 'text-white/75' : 'text-muted')} />
