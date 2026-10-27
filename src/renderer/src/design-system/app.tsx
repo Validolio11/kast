@@ -342,13 +342,13 @@ export function PulseRow({
   done?: boolean
   selected?: boolean
   muted?: boolean
-  /** Смуга старіння по нижньому краю: value 0…1 і підказка з кількістю днів */
+  /** Старіння: штриховка Hatch заповнює картку зліва (value 0…1); tip — для читачів екрана */
   age?: { value: number; tip: string }
 }) {
   return (
     <div
       className={cn(
-        'group row-enter relative flex min-h-[60px] items-center gap-3.5 rounded-[30px] pr-4 pl-3.5 transition-colors duration-150',
+        'group row-enter relative isolate flex min-h-[60px] items-center gap-3.5 rounded-[30px] pr-4 pl-3.5 transition-colors duration-150',
         selected ? 'bg-steel' : 'shadow-[inset_0_0_0_1px_var(--color-tile)] hover:bg-tile',
         onClick && 'cursor-pointer',
       )}
@@ -383,23 +383,24 @@ export function PulseRow({
           {meta}
         </div>
       )}
-      {age && <AgeBar {...age} />}
+      {age && <AgeFill {...age} />}
     </div>
   )
 }
 
-/** Тонка смуга на нижній рамці рядка: що старша задача, то довша й фіолетовіша. Без червоного «прострочено». */
-function AgeBar({ value, tip }: { value: number; tip: string }) {
+/**
+ * Старіння всередині картки — та сама штриховка, що й прогрес в інфо-рядках, але фіолетова.
+ * Заповнюється зліва з віком задачі; останні дні перед «Колись» штрихи рухаються. Без червоного «прострочено».
+ */
+function AgeFill({ value, tip }: { value: number; tip: string }) {
   const v = Math.max(0, Math.min(1, value))
   return (
-    <div role="img" aria-label={tip} data-tip={tip} className="absolute inset-x-8 -bottom-[5px] flex h-3 items-center" onClick={(e) => e.stopPropagation()}>
-      <div className="h-[2px] w-full rounded-full bg-tile">
-        <div
-          className="h-full rounded-full transition-[width] duration-700 ease-pulse"
-          style={{ width: `${Math.max(v * 100, 6)}%`, background: 'linear-gradient(90deg, var(--color-steel), var(--color-violet))', backgroundSize: `${100 / Math.max(v, 0.06)}% 100%` }}
-        />
+    <>
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-[30px]">
+        <Hatch value={Math.max(v, 0.04) * 100} color="rgb(132 66 255 / 0.32)" live={v >= 0.85} />
       </div>
-    </div>
+      <span className="sr-only">{tip}</span>
+    </>
   )
 }
 
