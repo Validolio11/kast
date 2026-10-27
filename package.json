@@ -1,7 +1,7 @@
 {
   "name": "kast",
   "productName": "Kast",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Kast — To-do з блокнотом, що не перевантажує",
   "author": "Ivan",
   "private": true,
