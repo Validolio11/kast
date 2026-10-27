@@ -24,7 +24,7 @@ export interface AppInfo {
 /** Результат входу через Google: одноразовий код або причина невдачі */
 export type OAuthResult = { code: string; error?: undefined } | { code?: undefined; error: string }
 
-export type NavTarget = 'today' | 'notebook' | 'inbox' | 'done' | 'close-day' | 'settings'
+export type NavTarget = 'today' | 'notebook' | 'inbox' | 'done' | 'close-day' | 'settings' | 'update'
 
 export interface KastApi {
   info: AppInfo

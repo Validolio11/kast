@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppHeader, RoundButton, SyncDot, ToastProvider, UpdatePill, WindowControls, type NavTab } from '@/design-system'
+import { AppHeader, RoundButton, SyncDot, ToastProvider, UpdatePill, useToast, WindowControls, type NavTab } from '@/design-system'
 import { useDay, useStatus, useToday } from '@/data/hooks'
 import { rolloverLeftovers, sweepStale } from '@/data/tasks'
 import { markLegacyQuickNote } from '@/data/notes'
@@ -34,6 +34,7 @@ function Shell() {
   const date = useDayKey()
   const [settings] = useSettings()
   const update = useUpdateState()
+  const toast = useToast()
   const sync = useSync()
   const today = useToday(date)
   const inbox = useStatus('inbox')
@@ -70,6 +71,8 @@ function Shell() {
   }, [])
 
   // Перехід з трею / сповіщення
+  const updateRef = useRef(update)
+  updateRef.current = update
   useEffect(
     () =>
       window.kast?.onNavigate((t) => {
@@ -77,9 +80,19 @@ function Shell() {
           go('today')
           setClosing(true)
         } else if (t === 'settings') setSettingsOpen(true)
-        else go(t)
+        else if (t === 'update') {
+          // Клік по сповіщенню про оновлення: одна дія — перезапустити
+          const u = updateRef.current
+          if (u.kind === 'ready')
+            toast({
+              title: `Версія ${u.version} готова`,
+              text: 'Перезапуск займе кілька секунд',
+              ms: 10_000,
+              action: { label: 'Перезапустити', onClick: () => window.kast.updates.install() },
+            })
+        } else go(t)
       }),
-    [go],
+    [go, toast],
   )
 
   // Гарячі клавіші: Ctrl+1..4 — вкладки, Ctrl+N — поле запису, Ctrl+, — налаштування

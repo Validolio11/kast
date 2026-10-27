@@ -4,7 +4,7 @@ import { join, normalize } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { AppInfo, NavTarget, Settings } from '../shared/types'
 import * as settings from './settings'
-import { setupUpdater } from './updater'
+import { installUpdate, setupUpdater } from './updater'
 import { cancelOAuth, openOAuth, prepareOAuth } from './auth'
 
 const DEV_URL = process.env.ELECTRON_RENDERER_URL
@@ -23,6 +23,8 @@ let main: BrowserWindow | null = null
 let capture: BrowserWindow | null = null
 let tray: Tray | null = null
 let quitting = false
+/** Версія, що вже завантажена й чекає перезапуску */
+let updateReady: string | null = null
 
 // Налагодження: KAST_CDP=9333 відкриває порт DevTools (знімки вікна, автотести)
 if (process.env.KAST_CDP) app.commandLine.appendSwitch('remote-debugging-port', process.env.KAST_CDP)
@@ -178,6 +180,9 @@ function setTrayMenu() {
     Menu.buildFromTemplate([
       { label: 'Відкрити Kast', click: () => showMain() },
       { label: `Швидкий запис    ${prettyHotkey(settings.load().hotkey)}`, click: toggleCapture },
+      ...(updateReady
+        ? ([{ type: 'separator' }, { label: `Перезапустити й оновити до ${updateReady}`, click: installUpdate }] as const)
+        : []),
       { type: 'separator' },
       {
         label: 'Вийти',
@@ -263,7 +268,11 @@ app.whenReady().then(() => {
   })
   Menu.setApplicationMenu(null)
   setupIpc()
-  setupUpdater()
+  setupUpdater((version) => {
+    updateReady = version
+    setTrayMenu()
+    notify('Оновлення Kast готове', `Версія ${version}. Перезапустіть Kast, щоб оновитись, або воно встановиться, коли закриєте програму.`, 'update')
+  })
   createMain()
   createCapture()
   createTray()

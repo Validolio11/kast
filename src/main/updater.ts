@@ -28,12 +28,15 @@ async function check() {
   }
 }
 
-export function setupUpdater() {
+/** onReady — один раз, коли нова версія завантажена (сповіщення, пункт у треї) */
+export function installUpdate() {
+  if (state.kind === 'ready') autoUpdater.quitAndInstall(true, true)
+}
+
+export function setupUpdater(onReady?: (version: string) => void) {
   ipcMain.handle('update:state', () => state)
   ipcMain.handle('update:check', () => check())
-  ipcMain.on('update:install', () => {
-    if (state.kind === 'ready') autoUpdater.quitAndInstall(true, true)
-  })
+  ipcMain.on('update:install', installUpdate)
 
   if (!app.isPackaged) return
 
@@ -45,9 +48,10 @@ export function setupUpdater() {
   autoUpdater.on('download-progress', (p) =>
     set({ kind: 'downloading', percent: Math.round(p.percent), version: state.kind === 'downloading' ? state.version : undefined }),
   )
-  autoUpdater.on('update-downloaded', (info) =>
-    set({ kind: 'ready', version: info.version, notes: notesToText(info.releaseNotes) }),
-  )
+  autoUpdater.on('update-downloaded', (info) => {
+    set({ kind: 'ready', version: info.version, notes: notesToText(info.releaseNotes) })
+    onReady?.(info.version)
+  })
   autoUpdater.on('error', (e) => set({ kind: 'error', message: e?.message ?? 'Помилка оновлення' }))
 
   setTimeout(check, 10_000)
