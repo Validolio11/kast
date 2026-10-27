@@ -651,6 +651,8 @@ export function InfoRow({
   progress?: number
   tip?: string
 }) {
+  // На фіолетовій заливці прогресу сірий текст губиться — світліший
+  const filled = progress !== undefined && progress > 0
   return (
     <div
       data-tip={tip}
@@ -659,9 +661,15 @@ export function InfoRow({
         tone === 'accent' ? 'shadow-[inset_0_0_0_1px_var(--color-growth)]' : 'shadow-[inset_0_0_0_1px_var(--color-tile)]',
       )}
     >
-      {progress !== undefined && progress > 0 && <Hatch value={progress} color="rgb(19 242 135 / 0.28)" />}
-      <Icon name={icon} size={18} className={cn('relative shrink-0', tone === 'accent' ? 'text-growth' : 'text-muted')} />
-      <p className="relative min-w-0 flex-1 truncate text-[15px] font-semibold text-muted">
+      {filled && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-0 animate-hatch-fill bg-data transition-[width] duration-700 ease-pulse"
+          style={{ width: `${Math.min(100, progress)}%` }}
+        />
+      )}
+      <Icon name={icon} size={18} className={cn('relative shrink-0', tone === 'accent' ? 'text-growth' : filled ? 'text-white/75' : 'text-muted')} />
+      <p className={cn('relative min-w-0 flex-1 truncate text-[15px] font-semibold', filled ? 'text-white/75' : 'text-muted')}>
         <span className={tone === 'accent' ? 'text-growth' : 'text-white'}>{title}</span>
         {text && <span> · {text}</span>}
       </p>
