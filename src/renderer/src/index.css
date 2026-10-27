@@ -299,7 +299,7 @@
   .note-img {
     display: inline-block;
     vertical-align: top;
-    margin: 4px 8px 8px 0;
+    margin: 4px 16px 12px 0;
     overflow: hidden;
     border-radius: 20px;
     background: var(--color-paper-line);
@@ -316,12 +316,14 @@
     height: auto;
     min-height: 60px;
   }
-  .note-img[data-size='s'] { width: calc(33.333% - 8px); }
-  .note-img[data-size='m'] { width: calc(50% - 8px); }
+  /* Ширина враховує відступ 16px між фото: два середні або три малі стають в один ряд */
+  .note-img[data-size='s'] { width: calc(33.333% - 16px); }
+  .note-img[data-size='m'] { width: calc(50% - 16px); }
   .note-img[data-size='l'] { width: 100%; }
-  .note-img[data-wrap='left'] { float: left; margin: 4px 16px 8px 0; }
-  .note-img[data-wrap='right'] { float: right; margin: 4px 0 8px 16px; }
+  .note-img[data-wrap='left'] { float: left; margin: 4px 16px 12px 0; }
+  .note-img[data-wrap='right'] { float: right; margin: 4px 0 12px 16px; }
   .note-img[data-wrap='block'] { display: block; margin: 8px 0; }
+  .note-img[data-size='l'] { margin-inline: 0; }
   /* Фото «окремо» слідує вирівнюванню свого рядка */
   .note-editor div[style*='center'] > .note-img[data-wrap='block'] { margin-inline: auto; }
   .note-editor div[style*='right'] > .note-img[data-wrap='block'] { margin-left: auto; }
