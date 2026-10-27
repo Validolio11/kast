@@ -342,13 +342,13 @@ export function PulseRow({
   done?: boolean
   selected?: boolean
   muted?: boolean
-  /** Старіння: штриховка Hatch заповнює картку зліва (value 0…1); tip — для читачів екрана */
+  /** Старіння: маленька шкала перед мета-даними (value 0…1) і підказка з кількістю днів */
   age?: { value: number; tip: string }
 }) {
   return (
     <div
       className={cn(
-        'group row-enter relative isolate flex min-h-[60px] items-center gap-3.5 rounded-[30px] pr-4 pl-3.5 transition-colors duration-150',
+        'group row-enter relative flex min-h-[60px] items-center gap-3.5 rounded-[30px] pr-4 pl-3.5 transition-colors duration-150',
         selected ? 'bg-steel' : 'shadow-[inset_0_0_0_1px_var(--color-tile)] hover:bg-tile',
         onClick && 'cursor-pointer',
       )}
@@ -378,29 +378,28 @@ export function PulseRow({
           {actions}
         </div>
       )}
-      {meta && (
+      {(meta || age) && (
         <div className="flex shrink-0 items-center gap-2 text-[13px] font-semibold text-muted" onClick={(e) => e.stopPropagation()}>
+          {age && <AgeScale {...age} />}
           {meta}
         </div>
       )}
-      {age && <AgeFill {...age} />}
     </div>
   )
 }
 
 /**
- * Старіння всередині картки — та сама штриховка, що й прогрес в інфо-рядках, але фіолетова.
- * Заповнюється зліва з віком задачі; останні дні перед «Колись» штрихи рухаються. Без червоного «прострочено».
+ * Шкала старіння: маленька заокруглена капсула з фіолетовою штриховкою Hatch.
+ * Заповнюється з віком задачі; останні дні перед «Колись» штрихи рухаються. Без червоного «прострочено».
  */
-function AgeFill({ value, tip }: { value: number; tip: string }) {
+function AgeScale({ value, tip }: { value: number; tip: string }) {
   const v = Math.max(0, Math.min(1, value))
   return (
-    <>
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-[30px]">
-        <Hatch value={Math.max(v, 0.04) * 100} color="rgb(132 66 255 / 0.32)" live={v >= 0.85} />
-      </div>
-      <span className="sr-only">{tip}</span>
-    </>
+    <span role="img" aria-label={tip} data-tip={tip} className="mr-1 grid h-[30px] items-center">
+      <span className="relative block h-3 w-20 overflow-hidden rounded-full bg-tile">
+        <Hatch value={Math.max(v, 0.08) * 100} color="var(--color-violet)" live={v >= 0.85} />
+      </span>
+    </span>
   )
 }
 
