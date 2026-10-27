@@ -54,11 +54,14 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
         <div className="mb-7 flex animate-enter items-start gap-5">
           <RoundButton icon="chevronLeft" size={56} label="Назад · Esc" onClick={onClose} />
           <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-            <PulseChip tone={isToday ? 'growth' : 'steel'} className="self-start">
-              {STATUS_LABEL[task.status]}
-            </PulseChip>
+            {/* Підпис над назвою: одразу ясно, що це задача і де вона лежить */}
+            <div className="flex items-center gap-3">
+              <span className="text-[15px] font-extrabold text-grey">Задача</span>
+              <PulseChip tone={isToday ? 'growth' : 'steel'}>{STATUS_LABEL[task.status]}</PulseChip>
+            </div>
             <Field
               value={task.title}
+              placeholder="Назва задачі"
               onSave={(title) => title.trim() && update(task.id, { title: title.trim() })}
               className="text-[clamp(32px,min(4.4vw,7vh),56px)] leading-[0.95] font-extrabold tracking-[-0.04em] text-paper"
             />
