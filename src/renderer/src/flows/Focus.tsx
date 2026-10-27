@@ -457,48 +457,77 @@ function Timer({ task }: { task: Task }) {
   const pick = (m: number) => save({ minutes: m, endAt: null, left: m * 60 })
   const mm = String(Math.floor(left / 60)).padStart(2, '0')
   const ss = String(left % 60).padStart(2, '0')
+  const remaining = minutes ? left / (minutes * 60) : 0
 
   return (
-    <section className="flex flex-col gap-5 rounded-tile bg-data p-7 text-white">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[14px] font-bold text-white/80">{running ? 'Йде фокус' : 'Таймбокс'}</span>
-        <div className="flex gap-1 rounded-full bg-canvas/25 p-1">
-          {PRESETS.map((m) => (
+    <section className="flex gap-4 rounded-tile bg-data p-7 text-white">
+      <div className="flex min-w-0 flex-1 flex-col gap-4">
+        <div className="flex items-center gap-3">
+          <span className="text-[14px] font-bold text-white/80">{running ? 'Йде фокус' : 'Таймбокс'}</span>
+          <div className="flex gap-1 rounded-full bg-canvas/25 p-1">
+            {PRESETS.map((m) => (
+              <button
+                key={m}
+                onClick={() => pick(m)}
+                aria-pressed={m === minutes}
+                className={cn('h-8 rounded-full px-3 text-[13px] font-extrabold transition-colors', m === minutes ? 'bg-paper text-ink' : 'text-white/80 hover:text-white')}
+              >
+                {m} хв
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-end gap-4">
+          <span className="text-[64px] leading-none font-extrabold tracking-[-0.045em] tabular-nums">
+            {mm}:{ss}
+          </span>
+          <div className="flex items-center gap-2">
+            {left !== minutes * 60 && (
+              <button
+                onClick={() => pick(minutes)}
+                aria-label="Скинути таймер"
+                data-tip="Скинути"
+                className="grid size-11 place-items-center rounded-full bg-canvas/25 text-white transition hover:bg-canvas/40"
+              >
+                <Icon name="rotateCcw" size={18} />
+              </button>
+            )}
             <button
-              key={m}
-              onClick={() => pick(m)}
-              aria-pressed={m === minutes}
-              className={cn('h-8 rounded-full px-3 text-[13px] font-extrabold transition-colors', m === minutes ? 'bg-paper text-ink' : 'text-white/80 hover:text-white')}
+              onClick={() => (running ? pause() : start())}
+              aria-label={running ? 'Пауза' : 'Почати'}
+              className="grid size-14 place-items-center rounded-full bg-paper text-ink transition hover:scale-105 active:scale-95"
             >
-              {m} хв
+              <Icon name={running ? 'pause' : 'play'} size={20} />
             </button>
-          ))}
+          </div>
         </div>
       </div>
-      <div className="flex items-end justify-between gap-3">
-        <span className="text-[64px] leading-none font-extrabold tracking-[-0.045em] tabular-nums">
-          {mm}:{ss}
-        </span>
-        <div className="flex items-center gap-2">
-          {left !== minutes * 60 && (
-            <button
-              onClick={() => pick(minutes)}
-              aria-label="Скинути таймер"
-              data-tip="Скинути"
-              className="grid size-11 place-items-center rounded-full bg-canvas/25 text-white transition hover:bg-canvas/40"
-            >
-              <Icon name="rotateCcw" size={18} />
-            </button>
-          )}
-          <button
-            onClick={() => (running ? pause() : start())}
-            aria-label={running ? 'Пауза' : 'Почати'}
-            className="grid size-14 place-items-center rounded-full bg-paper text-ink transition hover:scale-105 active:scale-95"
-          >
-            <Icon name={running ? 'pause' : 'play'} size={20} />
-          </button>
-        </div>
-      </div>
+      <Hourglass remaining={remaining} running={running} />
     </section>
+  )
+}
+
+/**
+ * Пісочний годинник у стилі прогрес-ліній: дві доріжки-капсули з капсулою всередині.
+ * Угорі — скільки лишилося, унизу — скільки минуло; поки йде відлік, у перешийку пульсує піщинка.
+ */
+function Hourglass({ remaining, running }: { remaining: number; running: boolean }) {
+  const r = Math.max(0, Math.min(1, remaining))
+  const chamber = (fill: number) => (
+    <span className="relative block w-7 flex-1 overflow-hidden rounded-full bg-canvas/25">
+      {fill > 0 && (
+        <span
+          className="absolute inset-x-[3px] bottom-[3px] rounded-full bg-paper transition-[height] duration-300 ease-linear"
+          style={{ height: `max(22px, calc((100% - 6px) * ${fill}))` }}
+        />
+      )}
+    </span>
+  )
+  return (
+    <div role="img" aria-label={`Лишилося ${Math.round(r * 100)}%`} className="flex shrink-0 flex-col items-center gap-1 self-stretch">
+      {chamber(r)}
+      <span className={cn('h-2 w-[3px] rounded-full bg-paper/60', running && r > 0 ? 'animate-pulse' : 'opacity-0')} />
+      {chamber(1 - r)}
+    </div>
   )
 }
