@@ -24,6 +24,8 @@ export interface Task extends Syncable {
   firstStep: string
   /** Скільки кроків уже зроблено в цій задачі */
   stepsDone?: number
+  /** Черга кроків після поточного: на екрані їх не видно, наступний піднімається, коли поточний зроблено */
+  nextSteps?: string[]
   order: number
   /** День, на який задача запланована (YYYY-MM-DD) */
   planDate: string | null

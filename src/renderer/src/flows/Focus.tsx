@@ -3,8 +3,9 @@ import { Button, Card, CheckCircle, cn, Icon, PageGrid, PulseChip, RoundButton, 
 import { WHEN_OPTIONS } from '@/components/TaskRow'
 import { useEntering } from '@/components/Page'
 import { useTask } from '@/data/hooks'
-import { complete, finishStep, remove, setKind, takeToToday, toInbox, update } from '@/data/tasks'
+import { addSteps, complete, finishStep, remove, setKind, takeToToday, toInbox, update } from '@/data/tasks'
 import type { Task, TaskKind, TaskStatus, When } from '@/data/db'
+import { pluralWord } from '@/lib/time'
 
 const KIND_OPTIONS: { value: TaskKind; label: string }[] = [
   { value: 'main', label: 'Головна' },
@@ -134,7 +135,7 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
                   onSave={(notes) => update(task.id, { notes })}
                   placeholder="Деталі, посилання, думки…"
                   multiline
-                  className="mt-3 flex-1 text-[17px] leading-[1.6] font-medium text-ink placeholder:text-dim"
+                  className="mt-3 flex-1 bg-transparent text-[17px] leading-[1.6] font-medium text-ink placeholder:text-dim"
                 />
               </section>
             </>
@@ -146,21 +147,31 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
 }
 
 /**
- * Ковзний крок: на екрані завжди один конкретний крок. Відмітили — поле звільняється
- * з питанням «А наступний крок?», а лічильник тихо показує, скільки вже пройдено.
+ * Ковзний крок: на екрані завжди один конкретний крок. Кілька наступних можна записати наперед —
+ * вони чекають у черзі невидимими. Відмітили поточний — піднімається наступний; черга порожня —
+ * поле питає «А наступний крок?». Лічильник тихо показує, скільки вже пройдено.
  */
 function StepCard({ task }: { task: Task }) {
   const toast = useToast()
   const [celebrate, setCelebrate] = useState(false)
   const [round, setRound] = useState(0)
+  const [more, setMore] = useState('')
   const steps = task.stepsDone ?? 0
+  const queued = task.nextSteps?.length ?? 0
   const done = async () => {
+    const hadNext = queued > 0
     const undo = await finishStep(task.id)
     if (!undo) return
     setCelebrate(true)
     setTimeout(() => setCelebrate(false), 700)
-    setRound((r) => r + 1)
+    // Наступний уже піднявся з черги — фокус не потрібен; черга порожня — одразу питаємо наступний
+    if (!hadNext) setRound((r) => r + 1)
     toast({ title: 'Крок зроблено', action: { label: 'Скасувати', onClick: () => undo() } })
+  }
+  const addMore = (text: string) => {
+    if (!text.trim()) return
+    addSteps(task.id, text)
+    setMore('')
   }
   return (
     <Card className="flex flex-col gap-3 p-7">
@@ -179,8 +190,28 @@ function StepCard({ task }: { task: Task }) {
           </div>
         )}
       </div>
+      {task.firstStep && (
+        <input
+          value={more}
+          onChange={(e) => setMore(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && addMore(more)}
+          onPaste={(e) => {
+            // Вставили список — кожен рядок стає окремим кроком у черзі
+            const text = e.clipboardData.getData('text/plain')
+            if (!text.includes('\n')) return
+            e.preventDefault()
+            addMore(text)
+          }}
+          onBlur={() => addMore(more)}
+          placeholder="+ Записати ще крок наперед · Enter"
+          aria-label="Записати ще крок наперед"
+          className="h-11 w-full rounded-full bg-transparent px-5 text-[14px] font-semibold text-paper caret-growth outline-none placeholder:text-muted hover:bg-canvas/50 focus:bg-canvas"
+        />
+      )}
       <p className="px-1 text-[13px] font-semibold text-muted">
-        {steps ? `Кроків зроблено: ${steps}` : 'Розмите відкладається, конкретне — робиться.'}
+        {steps || queued
+          ? [steps && `Кроків зроблено: ${steps}`, queued && `далі ще ${queued} ${pluralWord(queued, ['крок', 'кроки', 'кроків'])}`].filter(Boolean).join(' · ')
+          : 'Розмите відкладається, конкретне — робиться.'}
       </p>
     </Card>
   )
@@ -229,7 +260,7 @@ function Field({
     },
     [],
   )
-  const cls = cn('w-full bg-transparent caret-growth outline-none', className)
+  const cls = cn('w-full caret-growth outline-none', className)
   if (multiline) return <textarea value={v} onChange={(e) => setV(e.target.value)} onBlur={save} placeholder={placeholder} className={cn(cls, 'resize-none')} />
   return (
     <input

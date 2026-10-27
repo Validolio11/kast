@@ -41,13 +41,31 @@ function newTask(title: string, patch: Partial<Task> = {}): Task {
 
 export const update = (id: string, patch: Partial<Task>) => db.tasks.update(id, touch(patch))
 
-/** Ковзний крок: поточний зроблено — поле звільняється під наступний, лічильник +1. Повертає скасування. */
+/**
+ * Ковзний крок: поточний зроблено — піднімається наступний із черги (або поле звільняється),
+ * лічильник +1. Повертає скасування.
+ */
 export async function finishStep(id: string) {
   const t = await db.tasks.get(id)
   if (!t?.firstStep.trim()) return undefined
-  const before = { firstStep: t.firstStep, stepsDone: t.stepsDone ?? 0 }
-  await update(id, { firstStep: '', stepsDone: before.stepsDone + 1 })
+  const queue = t.nextSteps ?? []
+  const before = { firstStep: t.firstStep, stepsDone: t.stepsDone ?? 0, nextSteps: queue }
+  await update(id, { firstStep: queue[0] ?? '', nextSteps: queue.slice(1), stepsDone: before.stepsDone + 1 })
   return () => update(id, before)
+}
+
+/** Додати кроки в чергу (кілька рядків — кілька кроків). Якщо поточного кроку немає, перший стає поточним. */
+export async function addSteps(id: string, text: string) {
+  const t = await db.tasks.get(id)
+  const steps = text.split('\n').map((s) => s.trim()).filter(Boolean)
+  if (!t || !steps.length) return
+  const queue = [...(t.nextSteps ?? [])]
+  let current = t.firstStep.trim()
+  for (const s of steps) {
+    if (!current) current = s
+    else queue.push(s)
+  }
+  await update(id, { firstStep: current, nextSteps: queue })
 }
 
 /* ───────── Запис ───────── */
