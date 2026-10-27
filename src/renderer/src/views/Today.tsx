@@ -195,9 +195,9 @@ function PlanDay({
         <button
           onClick={() => onTake(t.id)}
           aria-label={`Взяти на сьогодні: ${t.title}`}
-          className="grid size-8 place-items-center rounded-full bg-paper text-[18px] leading-none font-extrabold text-ink transition active:scale-90"
+          className="grid size-8 place-items-center rounded-full bg-paper text-ink transition active:scale-90"
         >
-          +
+          <Icon name="plus" size={16} strokeWidth={2.8} />
         </button>
       }
       title={t.title}
