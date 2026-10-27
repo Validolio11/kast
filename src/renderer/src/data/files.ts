@@ -1,7 +1,5 @@
-import { useLiveQuery } from 'dexie-react-hooks'
 import { now } from '@/lib/time'
 import { db, type FileRec } from './db'
-import { touch } from './tasks'
 
 /** Довша сторона після стиснення: скріншот лишається читабельним, а запис — легким для синхронізації */
 const MAX_SIDE = 1600
@@ -23,33 +21,22 @@ async function compress(file: Blob): Promise<{ data: string; w: number; h: numbe
   return { data, w, h }
 }
 
-/** Прикріпити фото чи скріншоти до нотатки або задачі; нечитабельні файли пропускаються */
+/** Прикріпити фото чи скріншоти до нотатки або задачі; повертає id доданих (нечитабельні пропускаються) */
 export async function addImages(owner: string, files: Iterable<Blob>) {
-  let added = 0
+  const added: string[] = []
   for (const file of files) {
     if (!file.type.startsWith('image/')) continue
     try {
       const { data, w, h } = await compress(file)
       const t = now()
-      await db.files.add({ id: crypto.randomUUID(), owner, data, w, h, createdAt: t, updatedAt: t, deleted: 0, dirty: 1 })
-      added++
+      const id = crypto.randomUUID()
+      await db.files.add({ id, owner, data, w, h, createdAt: t, updatedAt: t, deleted: 0, dirty: 1 })
+      added.push(id)
     } catch (e) {
       console.warn('image skipped', e)
     }
   }
   return added
-}
-
-export const removeImage = (id: string) => db.files.update(id, touch({ deleted: 1 as const }))
-export const restoreImage = (id: string) => db.files.update(id, touch({ deleted: 0 as const }))
-
-/** Фото нотатки чи задачі в порядку додавання */
-export function useImages(owner: string): FileRec[] | undefined {
-  return useLiveQuery(
-    async () =>
-      (await db.files.where('owner').equals(owner).toArray()).filter((f) => !f.deleted).sort((a, b) => a.createdAt - b.createdAt),
-    [owner],
-  )
 }
 
 /** Зберегти фото на диск: Electron покаже стандартне вікно «Зберегти як» */

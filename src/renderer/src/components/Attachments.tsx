@@ -1,65 +1,12 @@
-import { useEffect, useState } from 'react'
+/* Перегляд фото на весь екран і кнопка «Додати фото» — для фото всередині тексту нотаток */
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Button, ContextMenu, RoundButton, useToast } from '@/design-system'
+import { Button, RoundButton } from '@/design-system'
 import type { FileRec } from '@/data/db'
-import { downloadImage, removeImage, restoreImage, useImages } from '@/data/files'
-
-/**
- * Фото й скріншоти нотатки чи задачі: по три в рядок, клік — перегляд у повному розмірі
- * з кнопкою «Завантажити», правий клік — відкрити, завантажити або видалити.
- */
-export function Attachments({ owner }: { owner: string }) {
-  const images = useImages(owner)
-  const toast = useToast()
-  const [open, setOpen] = useState<number | null>(null)
-  const [menu, setMenu] = useState<{ x: number; y: number; file: FileRec; index: number } | null>(null)
-  if (!images?.length) return null
-
-  const remove = (file: FileRec) => {
-    removeImage(file.id)
-    toast({ kind: 'info', title: 'Фото видалено', action: { label: 'Скасувати', onClick: () => restoreImage(file.id) } })
-  }
-
-  return (
-    <>
-      <div className="mt-4 grid grid-cols-3 gap-3" contentEditable={false}>
-        {images.map((f, i) => (
-          <button
-            key={f.id}
-            onClick={() => setOpen(i)}
-            onContextMenu={(e) => {
-              e.preventDefault()
-              setMenu({ x: e.clientX, y: e.clientY, file: f, index: i })
-            }}
-            aria-label={`Відкрити фото ${i + 1}`}
-            className="aspect-[4/3] overflow-hidden rounded-[24px] bg-paper-line transition-transform duration-150 hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <img src={f.data} alt="" draggable={false} className="size-full object-cover" />
-          </button>
-        ))}
-      </div>
-      {menu && (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          label="Дії з фото"
-          onClose={() => setMenu(null)}
-          items={[
-            { label: 'Відкрити', icon: 'image', onSelect: () => (setMenu(null), setOpen(menu.index)) },
-            { label: 'Завантажити', icon: 'download', onSelect: () => (setMenu(null), downloadImage(menu.file)) },
-            { label: 'Видалити', icon: 'trashLines', tone: 'danger', onSelect: () => (setMenu(null), remove(menu.file)) },
-          ]}
-        />
-      )}
-      {open !== null && images[open] && (
-        <Viewer images={images} index={open} onIndex={setOpen} onClose={() => setOpen(null)} onRemove={(f) => (setOpen(null), remove(f))} />
-      )}
-    </>
-  )
-}
+import { downloadImage } from '@/data/files'
 
 /** Перегляд фото на весь екран: у натуральному розмірі (не більше вікна), стрілки — сусідні фото */
-function Viewer({
+export function Viewer({
   images,
   index,
   onIndex,
@@ -70,7 +17,8 @@ function Viewer({
   index: number
   onIndex: (i: number) => void
   onClose: () => void
-  onRemove: (f: FileRec) => void
+  /** Без нього (заблокована нотатка) кнопки «Видалити» немає */
+  onRemove?: (f: FileRec) => void
 }) {
   const file = images[index]
   const many = images.length > 1
@@ -110,7 +58,7 @@ function Viewer({
         <Button size="md" variant="pulse" iconLeft="download" onClick={() => downloadImage(file)}>
           Завантажити
         </Button>
-        <RoundButton icon="trash" label="Видалити фото" onClick={() => onRemove(file)} />
+        {onRemove && <RoundButton icon="trash" label="Прибрати з нотатки" onClick={() => onRemove(file)} />}
         {many && <RoundButton icon="chevronRight" label="Наступне · →" onClick={() => step(1)} />}
         <span className="px-2 text-[13px] font-bold text-muted tabular-nums">
           {many ? `${index + 1} / ${images.length} · ` : ''}
@@ -136,3 +84,54 @@ export function AddImageButton({ onFiles, tone = 'paper-line' }: { onFiles: (fil
   return <RoundButton icon="image" tone={tone} label="Додати фото · або Ctrl+V скріншот" onClick={pick} />
 }
 
+
+const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
+
+/**
+ * Увесь аркуш приймає фото перетягуванням: підсвічується, поки файл над ним.
+ * Кинуте прямо в текст обробляє редактор (фото лягає там, куди кинули), решту — onFiles.
+ */
+export function useImageDrop(onFiles: (files: File[]) => void, enabled = true) {
+  const [over, setOver] = useState(false)
+  const depth = useRef(0)
+  if (!enabled) return { over: false, dropProps: {} }
+  return {
+    over,
+    dropProps: {
+      onDragEnter: (e: React.DragEvent) => {
+        if (!hasFiles(e)) return
+        depth.current++
+        setOver(true)
+      },
+      onDragLeave: (e: React.DragEvent) => {
+        if (!hasFiles(e)) return
+        depth.current = Math.max(0, depth.current - 1)
+        if (!depth.current) setOver(false)
+      },
+      onDragOver: (e: React.DragEvent) => {
+        if (hasFiles(e)) e.preventDefault()
+      },
+      onDrop: (e: React.DragEvent) => {
+        depth.current = 0
+        setOver(false)
+        if (!hasFiles(e)) return
+        const images = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'))
+        if (e.defaultPrevented) return
+        e.preventDefault()
+        if (images.length) onFiles(images)
+      },
+    },
+  }
+}
+
+/** Підказка поверх аркуша, поки над ним тягнуть фото */
+export function DropHint({ show }: { show: boolean }) {
+  if (!show) return null
+  return (
+    <div className="pointer-events-none absolute inset-2 z-10 grid animate-fade-in place-items-center rounded-[40px] bg-paper/85 shadow-[inset_0_0_0_3px_var(--color-growth)]">
+      <span className="flex items-center gap-2 rounded-full bg-canvas px-5 py-3 text-[15px] font-extrabold text-white">
+        Відпустіть, щоб додати фото
+      </span>
+    </div>
+  )
+}

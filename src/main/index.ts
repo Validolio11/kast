@@ -97,6 +97,10 @@ function createMain() {
     if (/^https?:\/\//i.test(url)) shell.openExternal(url)
     return { action: 'deny' }
   })
+  // Файл, кинутий повз зону фото, не має відкритися у вікні замість Kast
+  main.webContents.on('will-navigate', (e, url) => {
+    if (url !== main?.webContents.getURL()) e.preventDefault()
+  })
 }
 
 function showMain(target?: NavTarget) {

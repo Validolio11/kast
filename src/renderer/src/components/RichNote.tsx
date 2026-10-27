@@ -1,7 +1,13 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import { liveQuery } from 'dexie'
 import { cn, ContextMenu, Icon, useToast, type MenuAction } from '@/design-system'
 import { SENT_MARK, TASK_LINE } from '@/data/notes'
+import { db, type FileRec } from '@/data/db'
+import { addImages, downloadImage } from '@/data/files'
+import { Viewer } from './Attachments'
 import {
+  alignBlocks,
+  alignOf,
   applyStyle,
   BASE_SIZE,
   blockOf,
@@ -10,19 +16,26 @@ import {
   FONTS,
   fontStack,
   makeChip,
+  makeImage,
   makeLinkChip,
   plainText,
   sanitize,
+  serialize,
   styleAt,
   toggleNumbering,
   URL_RE,
   WEIGHTS,
+  type Align,
+  type ImgSize,
+  type ImgWrap,
 } from './richText'
 
 export interface RichNoteHandle {
   /** Перетворити рядок під курсором на задачу */
   convertCurrent(): void
   focusStart(): void
+  /** Вставити фото туди, де курсор (або в кінець) */
+  insertImages(files: File[]): void
 }
 
 interface MenuState {
@@ -30,6 +43,7 @@ interface MenuState {
   y: number
   range: Range | null
   chip: HTMLElement | null
+  img?: HTMLElement | null
 }
 
 /**
@@ -43,29 +57,42 @@ export const RichNote = forwardRef<RichNoteHandle, {
   onLineToTask: (title: string) => Promise<void>
   /** Редагування заблоковане: лише читати, виділяти й копіювати */
   readOnly?: boolean
-  /** Вставлені чи перетягнуті фото й скріншоти */
-  onImages?: (files: File[]) => void
-  /** Що показати під текстом у тій самій прокрутці (галерея фото) */
-  after?: ReactNode
-}>(function RichNote({ html, placeholder, onChange, onLineToTask, readOnly, onImages, after }, ref) {
+  /** Куди прикріплювати фото (id нотатки чи задачі); без нього фото вставити не можна */
+  imageOwner?: string
+}>(function RichNote({ html, placeholder, onChange, onLineToTask, readOnly, imageOwner }, ref) {
   const editor = useRef<HTMLDivElement>(null)
   const lastHtml = useRef<string | null>(null)
+  const lastRange = useRef<Range | null>(null)
   const [empty, setEmpty] = useState(false)
   const [menu, setMenu] = useState<MenuState | null>(null)
+  const [viewer, setViewer] = useState<{ files: FileRec[]; index: number } | null>(null)
   const toast = useToast()
 
   const el = () => editor.current!
+  const isEmpty = (e: HTMLElement) => !plainText(e).trim() && !e.querySelector('.note-chip, .note-img')
+
+  /** Підставити зображення у фото, яких ще не видно (після завантаження або коли файл приїхав із синхронізації) */
+  const hydrate = useCallback(async () => {
+    const e = editor.current
+    if (!e) return
+    for (const img of Array.from(e.querySelectorAll<HTMLImageElement>('.note-img img:not([src])'))) {
+      const id = (img.parentElement as HTMLElement).dataset.file!
+      const file = await db.files.get(id)
+      if (file && !file.deleted) img.src = file.data
+    }
+  }, [])
 
   const emit = useCallback(() => {
     const e = editor.current
     if (!e) return
     if (!e.firstChild || e.innerHTML === '<br>') e.innerHTML = '<div><br></div>'
     // Фокус і blur без змін не зберігаємо — інакше нотатка «оновлюється» і стрибає вгору списку
-    if (e.innerHTML === lastHtml.current) return
-    const text = plainText(e)
-    setEmpty(!text.trim() && !e.querySelector('.note-chip'))
-    lastHtml.current = e.innerHTML
-    onChange(e.innerHTML, text)
+    const out = serialize(e)
+    if (out === lastHtml.current) return
+    setEmpty(isEmpty(e))
+    lastHtml.current = out
+    onChange(out, plainText(e))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onChange])
 
   // Зовнішні зміни (синхронізація, швидкий запис) підхоплюємо, якщо ви зараз не друкуєте
@@ -74,24 +101,67 @@ export const RichNote = forwardRef<RichNoteHandle, {
     if (!e || html === lastHtml.current) return
     if (lastHtml.current !== null && document.activeElement === e) return
     e.innerHTML = sanitize(html)
-    lastHtml.current = e.innerHTML
-    setEmpty(!plainText(e).trim() && !e.querySelector('.note-chip'))
-  }, [html])
+    lastHtml.current = serialize(e)
+    setEmpty(isEmpty(e))
+    hydrate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [html, hydrate])
 
-  // Підказка лежить поверх і місця не займає: над галереєю фото лишаємо висоту на всю підказку
-  const hasAfter = !!after
-  useLayoutEffect(() => {
-    const e = editor.current
-    if (!e || !hasAfter) return
-    const fit = () => {
-      const h = empty && !readOnly ? parseFloat(getComputedStyle(e, '::before').height) || 0 : 0
-      e.style.minHeight = h ? `${h}px` : ''
+  // Файли нотатки змінилися (додали, приїхали з іншого ПК) — показуємо зображення
+  useEffect(() => {
+    if (!imageOwner) return
+    const sub = liveQuery(() => db.files.where('owner').equals(imageOwner).count()).subscribe(() => hydrate())
+    return () => sub.unsubscribe()
+  }, [imageOwner, hydrate])
+
+  // Запам'ятовуємо місце курсора, щоб кнопка «Додати фото» вставляла саме туди
+  useEffect(() => {
+    const onSel = () => {
+      const sel = getSelection()
+      if (sel?.rangeCount && editor.current?.contains(sel.getRangeAt(0).startContainer)) lastRange.current = sel.getRangeAt(0).cloneRange()
     }
-    fit()
-    const ro = new ResizeObserver(fit)
-    ro.observe(e)
-    return () => ro.disconnect()
-  }, [hasAfter, empty, readOnly, placeholder])
+    document.addEventListener('selectionchange', onSel)
+    return () => document.removeEventListener('selectionchange', onSel)
+  }, [])
+
+  /** Фото — у текст, туди, де курсор: одне — половина ширини з обтіканням, кілька — по три в рядок */
+  const insertImages = async (files: File[], at?: Range | null) => {
+    if (!imageOwner || readOnly) return
+    const ids = await addImages(imageOwner, files)
+    if (!ids.length) return toast({ kind: 'error', title: 'Не вдалося додати фото', text: 'Підтримуються PNG, JPG, WebP, GIF' })
+    let range = at ?? lastRange.current
+    if (!range || !el().contains(range.startContainer)) {
+      range = document.createRange()
+      range.selectNodeContents(el().lastElementChild ?? el())
+      range.collapse(false)
+    }
+    const many = ids.length > 1
+    let last: Node | null = null
+    for (const id of ids) {
+      const box = makeImage(id, many ? 's' : 'm', many ? 'inline' : 'left')
+      range.insertNode(box)
+      range.setStartAfter(box)
+      range.collapse(true)
+      last = box
+    }
+    if (last) {
+      const r = document.createRange()
+      r.setStartAfter(last)
+      r.collapse(true)
+      el().focus()
+      select(r)
+    }
+    await hydrate()
+    emit()
+  }
+
+  /** Перегляд усіх фото нотатки в порядку тексту, починаючи з клікнутого */
+  const openViewer = async (box: HTMLElement) => {
+    const boxes = Array.from(el().querySelectorAll<HTMLElement>('.note-img'))
+    const files = (await Promise.all(boxes.map((b) => db.files.get(b.dataset.file!)))).filter((f): f is FileRec => !!f && !f.deleted)
+    const index = Math.max(0, files.findIndex((f) => f.id === box.dataset.file))
+    if (files.length) setViewer({ files, index })
+  }
 
   const select = (range: Range) => {
     const sel = getSelection()
@@ -146,6 +216,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
   }
 
   useImperativeHandle(ref, () => ({
+    insertImages: (files) => insertImages(files),
     convertCurrent: () => convert(currentBlock(), false),
     focusStart: () => {
       el().focus()
@@ -227,7 +298,10 @@ export const RichNote = forwardRef<RichNoteHandle, {
     e.preventDefault()
     if (readOnly) return
     const images = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'))
-    if (images.length && onImages) return onImages(images)
+    if (images.length && imageOwner) {
+      const sel = getSelection()
+      return void insertImages(images, sel?.rangeCount ? sel.getRangeAt(0) : null)
+    }
     const text = e.clipboardData.getData('text/plain')
     if (URL_RE.test(text.trim())) {
       const sel = getSelection()
@@ -251,9 +325,10 @@ export const RichNote = forwardRef<RichNoteHandle, {
   const onDrop = (e: React.DragEvent) => {
     if (readOnly) return e.preventDefault()
     const images = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'))
-    if (images.length && onImages) {
+    if (images.length && imageOwner) {
       e.preventDefault()
-      return onImages(images)
+      // Фото лягає туди, куди його кинули
+      return void insertImages(images, document.caretRangeFromPoint?.(e.clientX, e.clientY))
     }
     const text = e.dataTransfer.getData('text/plain')
     if (!text) return
@@ -265,6 +340,9 @@ export const RichNote = forwardRef<RichNoteHandle, {
 
   // Кнопка копіювання в чипі
   const onClick = async (e: React.MouseEvent) => {
+    // Клік по фото — перегляд у повному розмірі
+    const box = (e.target as HTMLElement).closest('.note-img') as HTMLElement | null
+    if (box) return void openViewer(box)
     // Посилання відкривається в браузері кліком по чипу
     const link = (e.target as HTMLElement).closest('.note-link') as HTMLElement | null
     if (link?.dataset.url) {
@@ -281,16 +359,44 @@ export const RichNote = forwardRef<RichNoteHandle, {
   }
 
   /* ───────── Меню ───────── */
-  const openMenu = (x: number, y: number, chip: HTMLElement | null) => {
+  const openMenu = (x: number, y: number, chip: HTMLElement | null, img: HTMLElement | null = null) => {
     const sel = getSelection()
     const range = sel?.rangeCount && el().contains(sel.getRangeAt(0).commonAncestorContainer) ? sel.getRangeAt(0).cloneRange() : null
-    setMenu({ x, y, range, chip })
+    setMenu({ x, y, range, chip, img })
   }
 
   const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
-    const chip = (e.target as HTMLElement).closest('.note-chip') as HTMLElement | null
-    openMenu(e.clientX, e.clientY, chip)
+    const target = e.target as HTMLElement
+    const img = target.closest('.note-img') as HTMLElement | null
+    if (img) return openMenu(e.clientX, e.clientY, null, img)
+    openMenu(e.clientX, e.clientY, target.closest('.note-chip') as HTMLElement | null)
+  }
+
+  /** Рядки, яких стосується вирівнювання: рядок фото, виділені рядки або рядок із курсором */
+  const alignTargets = (): HTMLElement[] => {
+    if (menu?.img) return [blockOf(el(), menu.img)].filter((b): b is HTMLElement => !!b)
+    if (menu?.range) return blocksIn(el(), menu.range)
+    return [currentBlock()].filter((b): b is HTMLElement => !!b)
+  }
+  const align = (value: Align) => {
+    alignBlocks(alignTargets(), value)
+    emit()
+    setMenu((m) => (m ? { ...m } : m))
+  }
+
+  /** Фото прибирається з тексту (зі «Скасувати») */
+  const removeImageBox = (box: HTMLElement) => {
+    const before = snapshot()
+    box.remove()
+    done('Фото прибрано', before)
+  }
+  /** Розмір чи обтікання фото змінюється одразу, меню лишається відкритим */
+  const restyleImage = (box: HTMLElement, patch: { size?: ImgSize; wrap?: ImgWrap }) => {
+    if (patch.size) box.dataset.size = patch.size
+    if (patch.wrap) box.dataset.wrap = patch.wrap
+    emit()
+    setMenu((m) => (m ? { ...m } : m))
   }
 
   const close = useCallback(() => setMenu(null), [])
@@ -321,7 +427,25 @@ export const RichNote = forwardRef<RichNoteHandle, {
   // Заблокована нотатка: з меню лишається тільки копіювання
   const isLink = !!menu?.chip?.classList.contains('note-link')
   const openItem: MenuAction = { label: 'Відкрити', icon: 'arrowUpRight', onSelect: () => (window.open(chipText(menu!.chip!), '_blank'), close()) }
-  const items: MenuAction[] = readOnly
+  const imgBox = menu?.img ?? null
+  const imageItems: MenuAction[] = imgBox
+    ? [
+        { label: 'Відкрити', icon: 'image', onSelect: () => (close(), openViewer(imgBox)) },
+        {
+          label: 'Завантажити',
+          icon: 'download',
+          onSelect: async () => {
+            close()
+            const file = await db.files.get(imgBox.dataset.file!)
+            if (file) downloadImage(file)
+          },
+        },
+        ...(readOnly ? [] : [{ label: 'Прибрати з нотатки', icon: 'trashLines', tone: 'danger', onSelect: () => (close(), removeImageBox(imgBox)) } as MenuAction]),
+      ]
+    : []
+  const items: MenuAction[] = imgBox
+    ? imageItems
+    : readOnly
     ? isLink
       ? [openItem, copyItem]
       : [copyItem]
@@ -458,23 +582,115 @@ export const RichNote = forwardRef<RichNoteHandle, {
           onClick={onClick}
           onContextMenu={onContextMenu}
           onBlur={emit}
-          className={cn('note-editor w-full text-[17px] leading-[1.6] font-medium text-ink outline-none', after ? 'min-h-16' : 'min-h-full')}
+          className="note-editor min-h-full w-full text-[17px] leading-[1.6] font-medium text-ink outline-none"
         />
-        {after}
       </div>
       {menu && (
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          label={menu.chip ? (isLink ? 'Дії з посиланням' : 'Дії з кнопкою копіювання') : 'Дії з виділеним'}
+          label={imgBox ? 'Дії з фото' : menu.chip ? (isLink ? 'Дії з посиланням' : 'Дії з кнопкою копіювання') : 'Дії з виділеним'}
           items={items}
           onClose={close}
-          header={hasText && !menu.chip && !readOnly ? <FormatBar range={menu.range!} onStyle={restyle} /> : undefined}
+          header={
+            readOnly || menu.chip ? undefined : (
+              <div className="flex flex-col gap-2">
+                {imgBox ? <ImageBar box={imgBox} onChange={(patch) => restyleImage(imgBox, patch)} /> : hasText && <FormatBar range={menu.range!} onStyle={restyle} />}
+                <AlignBar value={alignOf(alignTargets()[0] ?? null)} onChange={align} />
+              </div>
+            )
+          }
+        />
+      )}
+      {viewer && (
+        <Viewer
+          images={viewer.files}
+          index={viewer.index}
+          onIndex={(index) => setViewer((v) => (v ? { ...v, index } : v))}
+          onClose={() => setViewer(null)}
+          onRemove={
+            readOnly
+              ? undefined
+              : (file) => {
+                  setViewer(null)
+                  const box = el().querySelector<HTMLElement>(`.note-img[data-file="${file.id}"]`)
+                  if (box) removeImageBox(box)
+                }
+          }
         />
       )}
     </>
   )
 })
+
+const ALIGN_OPTIONS: { value: Align; label: string; icon: 'alignLeft' | 'alignCenter' | 'alignRight' }[] = [
+  { value: 'left', label: 'Ліворуч', icon: 'alignLeft' },
+  { value: 'center', label: 'По центру', icon: 'alignCenter' },
+  { value: 'right', label: 'Праворуч', icon: 'alignRight' },
+]
+
+/** Вирівнювання рядка (чи рядка з фото): ліворуч, по центру, праворуч */
+function AlignBar({ value, onChange }: { value: Align; onChange: (v: Align) => void }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="px-1 text-[12px] font-bold text-muted">Вирівнювання</span>
+      <div role="group" aria-label="Вирівнювання" className="flex gap-0.5 rounded-[19px] bg-tile p-[3px]">
+        {ALIGN_OPTIONS.map((o) => (
+          <button
+            key={o.value}
+            aria-pressed={o.value === value}
+            aria-label={o.label}
+            data-tip={o.label}
+            onClick={() => onChange(o.value)}
+            className={cn('grid h-[34px] flex-1 place-items-center rounded-2xl', o.value === value ? 'bg-paper text-ink' : 'text-white hover:bg-steel')}
+          >
+            <Icon name={o.icon} size={17} />
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const IMG_SIZES: { value: ImgSize; label: string }[] = [
+  { value: 's', label: 'Малий' },
+  { value: 'm', label: 'Середній' },
+  { value: 'l', label: 'Великий' },
+]
+const IMG_WRAPS: { value: ImgWrap; label: string }[] = [
+  { value: 'left', label: 'Ліворуч' },
+  { value: 'right', label: 'Праворуч' },
+  { value: 'inline', label: 'У рядку' },
+  { value: 'block', label: 'Окремо' },
+]
+
+/** Верх меню фото: розмір і обтікання текстом, як у Word */
+function ImageBar({ box, onChange }: { box: HTMLElement; onChange: (patch: { size?: ImgSize; wrap?: ImgWrap }) => void }) {
+  const [, redraw] = useState(0)
+  const row = <T extends string>(label: string, options: { value: T; label: string }[], cur: string, set: (v: T) => void) => (
+    <div className="flex flex-col gap-1">
+      <span className="px-1 text-[12px] font-bold text-muted">{label}</span>
+      <div role="group" aria-label={label} className="flex gap-0.5 rounded-[19px] bg-tile p-[3px]">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            aria-pressed={o.value === cur}
+            onClick={() => (set(o.value), redraw((n) => n + 1))}
+            className={cn('h-[34px] flex-1 rounded-2xl px-2 text-[13px] font-bold', o.value === cur ? 'bg-paper text-ink' : 'text-white hover:bg-steel')}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+  return (
+    <div className="flex flex-col gap-2">
+      {row('Розмір', IMG_SIZES, box.dataset.size ?? 'm', (size) => onChange({ size }))}
+      {row('Обтікання текстом', IMG_WRAPS, box.dataset.wrap ?? 'left', (wrap) => onChange({ wrap }))}
+    </div>
+  )
+}
 
 /** Верх меню: шрифт (зі списком і пошуком), розмір, товщина — як у Karkas */
 function FormatBar({ range, onStyle }: { range: Range; onStyle: (prop: 'font-family' | 'font-size' | 'font-weight', value: string) => void }) {

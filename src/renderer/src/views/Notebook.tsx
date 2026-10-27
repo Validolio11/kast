@@ -5,8 +5,7 @@ import { useNotes } from '@/data/hooks'
 import { createNote, notePreview, noteTitle, removeNote, updateNote } from '@/data/notes'
 import { captureToInbox } from '@/data/tasks'
 import { RichNote, type RichNoteHandle } from '@/components/RichNote'
-import { AddImageButton, Attachments } from '@/components/Attachments'
-import { addImages } from '@/data/files'
+import { AddImageButton, DropHint, useImageDrop } from '@/components/Attachments'
 import { db } from '@/data/db'
 import { htmlToText, textToHtml } from '@/components/richText'
 import type { Note } from '@/data/db'
@@ -150,7 +149,7 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
       // Порожня нотатка (створили «+» і пішли) не лишається сміттям у списку
       const { title: t, pages: all, texts } = draft.current
       // …але нотатка лише з фото — не порожня
-      if (!t.trim() && texts.every((x) => !x.trim()) && !all.some((h) => h.includes('note-chip')))
+      if (!t.trim() && texts.every((x) => !x.trim()) && !all.some((h) => h.includes('note-chip') || h.includes('note-img')))
         db.files.where('owner').equals(note.id).count().then((n) => {
           if (n === 0) removeNote(note.id)
         })
@@ -225,6 +224,8 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
 
   const html = pages[page] ?? pages[0]
   const locked = !!note.locked
+  // Фото можна кинути будь-куди на аркуш — додається в кінець тексту (або туди, де курсор)
+  const drop = useImageDrop((files) => editorRef.current?.insertImages(files), !locked)
   const toggleLock = () => {
     flush()
     updateNote(note.id, { locked: locked ? undefined : 1 })
@@ -233,7 +234,8 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
 
   return (
     // Фіксований розмір за будь-якої ширини вікна; довгий текст прокручується всередині
-    <section className="flex h-[720px] flex-col rounded-panel bg-paper p-10 pb-6 text-ink max-[640px]:p-6">
+    <section className="relative flex h-[720px] flex-col rounded-panel bg-paper p-10 pb-6 text-ink max-[640px]:p-6" {...drop.dropProps}>
+      <DropHint show={drop.over} />
       <div className="flex items-center gap-3">
         {!!note.pinned && <PulseChip tone="growth">Закріплено</PulseChip>}
         {locked && <PulseChip tone="canvas">Лише читання</PulseChip>}
@@ -269,8 +271,7 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
           placeholder={'Думки, плани, протокол зустрічі…\n[] Рядок із дужками + Enter стане задачею\nПравий клік по виділеному — шрифт, нумерація, кнопка копіювання'}
           onChange={onText}
           readOnly={locked}
-          onImages={locked ? undefined : (files) => addImages(note.id, files)}
-          after={<Attachments owner={note.id} />}
+          imageOwner={note.id}
           onLineToTask={async (t) => {
             await captureToInbox(t, { sourceNoteId: note.id })
           }}
@@ -331,7 +332,7 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
             )}
           </div>
         </div>
-        {!locked && <AddImageButton onFiles={(files) => addImages(note.id, files)} />}
+        {!locked && <AddImageButton onFiles={(files) => editorRef.current?.insertImages(files)} />}
         {!locked && <RoundButton icon="lock" tone="paper-line" label="Заблокувати редагування" onClick={toggleLock} />}
         <RoundButton
           icon="pin"

@@ -44,6 +44,45 @@ export function makeLinkChip(url: string) {
   return chip
 }
 
+export type Align = 'left' | 'center' | 'right'
+const ALIGNS: Align[] = ['center', 'right']
+
+/** Вирівняти рядки: ліворуч — прибрати стиль, по центру чи праворуч — записати */
+export function alignBlocks(blocks: HTMLElement[], align: Align) {
+  for (const b of blocks) b.style.textAlign = align === 'left' ? '' : align
+}
+
+/** Поточне вирівнювання рядка */
+export const alignOf = (block: HTMLElement | null): Align => (block?.style.textAlign === 'center' || block?.style.textAlign === 'right' ? block.style.textAlign : 'left')
+
+export type ImgSize = 's' | 'm' | 'l'
+export type ImgWrap = 'left' | 'right' | 'inline' | 'block'
+const SIZES: ImgSize[] = ['s', 'm', 'l']
+const WRAPS: ImgWrap[] = ['left', 'right', 'inline', 'block']
+const FILE_ID = /^[0-9a-f-]{36}$/i
+
+/**
+ * Фото всередині тексту, як у Word: розмір (третина / половина / уся ширина) і обтікання.
+ * У HTML зберігаємо лише id файлу — саме зображення підставляється з бази при показі.
+ */
+export function makeImage(id: string, size: ImgSize = 'm', wrap: ImgWrap = 'left') {
+  const box = document.createElement('span')
+  box.className = 'note-img'
+  box.contentEditable = 'false'
+  box.dataset.file = id
+  box.dataset.size = size
+  box.dataset.wrap = wrap
+  box.innerHTML = '<img alt="" draggable="false">'
+  return box
+}
+
+/** HTML для збереження: без вбудованих зображень (лише посилання на файли) */
+export function serialize(editor: HTMLElement) {
+  const copy = editor.cloneNode(true) as HTMLElement
+  copy.querySelectorAll('.note-img img').forEach((img) => img.removeAttribute('src'))
+  return copy.innerHTML
+}
+
 /** Чип «кнопка копіювання»: текст + кругла кнопка копіювання */
 export function makeChip(text: string) {
   const chip = document.createElement('span')
@@ -73,6 +112,12 @@ export function sanitize(html: string) {
       if (n.nodeType !== Node.ELEMENT_NODE) return
       const el = n as HTMLElement
       if (el.tagName === 'BR') return void to.appendChild(document.createElement('br'))
+      if (el.classList.contains('note-img')) {
+        const { file = '', size = 'm', wrap = 'left' } = el.dataset
+        if (FILE_ID.test(file))
+          to.appendChild(makeImage(file, SIZES.includes(size as ImgSize) ? (size as ImgSize) : 'm', WRAPS.includes(wrap as ImgWrap) ? (wrap as ImgWrap) : 'left'))
+        return
+      }
       if (el.classList.contains('note-link')) {
         const url = el.dataset.url ?? ''
         return void to.appendChild(URL_RE.test(url) ? makeLinkChip(url) : document.createTextNode(url))
@@ -80,6 +125,8 @@ export function sanitize(html: string) {
       if (el.classList.contains('note-chip')) return void to.appendChild(makeChip(el.querySelector('.note-chip-text')?.textContent ?? el.textContent ?? ''))
       if (el.tagName === 'DIV') {
         const div = document.createElement('div')
+        // Вирівнювання рядка: лише по центру чи праворуч (ліворуч — типове)
+        if (ALIGNS.includes(el.style.textAlign as Align)) div.style.textAlign = el.style.textAlign
         walk(el, div)
         return void to.appendChild(div)
       }

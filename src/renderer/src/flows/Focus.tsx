@@ -6,10 +6,9 @@ import { useTask } from '@/data/hooks'
 import { addSteps, captureToInbox, complete, finishStep, remove, setKind, setSteps, takeToToday, toInbox, update } from '@/data/tasks'
 import type { Task, TaskKind, TaskStatus, When } from '@/data/db'
 import { pluralWord } from '@/lib/time'
-import { RichNote } from '@/components/RichNote'
+import { RichNote, type RichNoteHandle } from '@/components/RichNote'
 import { textToHtml } from '@/components/richText'
-import { AddImageButton, Attachments } from '@/components/Attachments'
-import { addImages } from '@/data/files'
+import { AddImageButton, DropHint, useImageDrop } from '@/components/Attachments'
 
 const KIND_OPTIONS: { value: TaskKind; label: string }[] = [
   { value: 'main', label: 'Головна' },
@@ -147,9 +146,11 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
 
 /**
  * Нотатки задачі — той самий редактор, що й у Блокноті: посилання стають чипами,
- * скріншот вставляється Ctrl+V, фото показуються по три в рядок під текстом.
+ * скріншот вставляється Ctrl+V прямо в текст, і текст обтікає фото, як у Word.
  */
 function TaskNotes({ task }: { task: Task }) {
+  const editorRef = useRef<RichNoteHandle>(null)
+  const drop = useImageDrop((files) => editorRef.current?.insertImages(files))
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const pending = useRef<{ notes: string; notesHtml: string } | null>(null)
   const flush = () => {
@@ -165,17 +166,18 @@ function TaskNotes({ task }: { task: Task }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   return (
-    <section className="flex min-h-[320px] flex-col rounded-panel bg-paper p-7 text-ink">
+    <section className="relative flex min-h-[320px] flex-col rounded-panel bg-paper p-7 text-ink" {...drop.dropProps}>
+      <DropHint show={drop.over} />
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">Нотатки</h2>
-        <AddImageButton onFiles={(files) => addImages(task.id, files)} />
+        <AddImageButton onFiles={(files) => editorRef.current?.insertImages(files)} />
       </div>
       <RichNote
+        ref={editorRef}
         html={task.notesHtml ?? textToHtml(task.notes)}
         placeholder="Деталі, посилання, думки…"
         onChange={onChange}
-        onImages={(files) => addImages(task.id, files)}
-        after={<Attachments owner={task.id} />}
+        imageOwner={task.id}
         onLineToTask={async (t) => {
           await captureToInbox(t)
         }}

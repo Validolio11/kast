@@ -292,6 +292,40 @@
     background: var(--color-paper);
     color: var(--color-ink);
   }
+  /* Фото в тексті, як у Word: третина / половина / уся ширина; обтікання ліворуч, праворуч, у рядку чи окремо */
+  .note-editor {
+    display: flow-root;
+  }
+  .note-img {
+    display: inline-block;
+    vertical-align: top;
+    margin: 4px 8px 8px 0;
+    overflow: hidden;
+    border-radius: 20px;
+    background: var(--color-paper-line);
+    cursor: pointer;
+    user-select: none;
+    transition: box-shadow 0.15s ease;
+  }
+  .note-img:hover {
+    box-shadow: 0 0 0 3px var(--color-growth);
+  }
+  .note-img img {
+    display: block;
+    width: 100%;
+    height: auto;
+    min-height: 60px;
+  }
+  .note-img[data-size='s'] { width: calc(33.333% - 8px); }
+  .note-img[data-size='m'] { width: calc(50% - 8px); }
+  .note-img[data-size='l'] { width: 100%; }
+  .note-img[data-wrap='left'] { float: left; margin: 4px 16px 8px 0; }
+  .note-img[data-wrap='right'] { float: right; margin: 4px 0 8px 16px; }
+  .note-img[data-wrap='block'] { display: block; margin: 8px 0; }
+  /* Фото «окремо» слідує вирівнюванню свого рядка */
+  .note-editor div[style*='center'] > .note-img[data-wrap='block'] { margin-inline: auto; }
+  .note-editor div[style*='right'] > .note-img[data-wrap='block'] { margin-left: auto; }
+
   /* Посилання — той самий чип, але клікабельний: іконка ланцюжка, коротка адреса, «Відкрити» */
   .note-link {
     gap: 8px;
