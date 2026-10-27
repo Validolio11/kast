@@ -5,6 +5,9 @@ import { useNotes } from '@/data/hooks'
 import { createNote, notePreview, noteTitle, removeNote, updateNote } from '@/data/notes'
 import { captureToInbox } from '@/data/tasks'
 import { RichNote, type RichNoteHandle } from '@/components/RichNote'
+import { AddImageButton, Attachments } from '@/components/Attachments'
+import { addImages } from '@/data/files'
+import { db } from '@/data/db'
 import { htmlToText, textToHtml } from '@/components/richText'
 import type { Note } from '@/data/db'
 import { age, fmtTime, pluralWord } from '@/lib/time'
@@ -146,7 +149,11 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
       flush()
       // Порожня нотатка (створили «+» і пішли) не лишається сміттям у списку
       const { title: t, pages: all, texts } = draft.current
-      if (!t.trim() && texts.every((x) => !x.trim()) && !all.some((h) => h.includes('note-chip'))) removeNote(note.id)
+      // …але нотатка лише з фото — не порожня
+      if (!t.trim() && texts.every((x) => !x.trim()) && !all.some((h) => h.includes('note-chip')))
+        db.files.where('owner').equals(note.id).count().then((n) => {
+          if (n === 0) removeNote(note.id)
+        })
     },
     [], // eslint-disable-line react-hooks/exhaustive-deps
   )
@@ -262,6 +269,8 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
           placeholder={'Думки, плани, протокол зустрічі…\n[] Рядок із дужками + Enter стане задачею\nПравий клік по виділеному — шрифт, нумерація, кнопка копіювання'}
           onChange={onText}
           readOnly={locked}
+          onImages={locked ? undefined : (files) => addImages(note.id, files)}
+          after={<Attachments owner={note.id} />}
           onLineToTask={async (t) => {
             await captureToInbox(t, { sourceNoteId: note.id })
           }}
@@ -322,6 +331,7 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
             )}
           </div>
         </div>
+        {!locked && <AddImageButton onFiles={(files) => addImages(note.id, files)} />}
         {!locked && <RoundButton icon="lock" tone="paper-line" label="Заблокувати редагування" onClick={toggleLock} />}
         <RoundButton
           icon="pin"

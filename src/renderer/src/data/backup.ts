@@ -1,8 +1,8 @@
 import { dayKey, now } from '@/lib/time'
-import { db, type Day, type Note, type Task } from './db'
+import { db, type Day, type FileRec, type Note, type Task } from './db'
 
 /*
- * Резервна копія — один JSON-файл з усіма задачами, нотатками й днями (разом із позначками видалення,
+ * Резервна копія — один JSON-файл з усіма задачами, нотатками, днями й фото (разом із позначками видалення,
  * щоб відновлення не «воскрешало» видалене). Не залежить від входу й синхронізації.
  */
 
@@ -13,6 +13,7 @@ interface Backup {
   tasks: Task[]
   notes: Note[]
   days: Day[]
+  files?: FileRec[]
 }
 
 export async function exportBackup() {
@@ -24,6 +25,7 @@ export async function exportBackup() {
     tasks: strip(await db.tasks.toArray()),
     notes: strip(await db.notes.toArray()),
     days: strip(await db.days.toArray()),
+    files: strip(await db.files.toArray()),
   }
   return { json: JSON.stringify(data, null, 2), name: `kast-${dayKey()}.json`, count: data.tasks.length + data.notes.length }
 }
@@ -45,12 +47,13 @@ export async function importBackup(text: string) {
   if (parsed.app !== 'kast' || !Array.isArray(parsed.tasks) || !Array.isArray(parsed.notes)) {
     throw new Error('Це не резервна копія Kast')
   }
-  const result = { tasks: 0, notes: 0, days: 0 }
-  await db.transaction('rw', db.tasks, db.notes, db.days, async () => {
+  const result = { tasks: 0, notes: 0, days: 0, files: 0 }
+  await db.transaction('rw', db.tasks, db.notes, db.days, db.files, async () => {
     for (const [name, table, key, rows] of [
       ['tasks', db.tasks, 'id', parsed.tasks],
       ['notes', db.notes, 'id', parsed.notes],
       ['days', db.days, 'date', parsed.days ?? []],
+      ['files', db.files, 'id', parsed.files ?? []],
     ] as const) {
       for (const row of rows as unknown[]) {
         if (!isRow(row, key)) continue

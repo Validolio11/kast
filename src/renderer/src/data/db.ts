@@ -22,6 +22,8 @@ export interface Task extends Syncable {
   when: When
   /** Поточний крок — завжди лише один (ковзний: зробили — питаємо наступний) */
   firstStep: string
+  /** Форматовані нотатки задачі (посилання-чипи, кнопки копіювання); notes — простий текст для пошуку */
+  notesHtml?: string
   /** Скільки кроків уже зроблено в цій задачі */
   stepsDone?: number
   /** Черга кроків після поточного: на екрані їх не видно, наступний піднімається, коли поточний зроблено */
@@ -54,6 +56,17 @@ export interface Note extends Syncable {
   createdAt: number
 }
 
+/** Фото чи скріншот, прикріплений до нотатки або задачі; стиснене зображення як data URL */
+export interface FileRec extends Syncable {
+  id: string
+  /** id нотатки чи задачі, до якої прикріплено */
+  owner: string
+  data: string
+  w: number
+  h: number
+  createdAt: number
+}
+
 export interface Day extends Syncable {
   date: string
   plannedAt: number | null
@@ -69,6 +82,7 @@ class KastDB extends Dexie {
   tasks!: Table<Task, string>
   notes!: Table<Note, string>
   days!: Table<Day, string>
+  files!: Table<FileRec, string>
   meta!: Table<Meta, string>
 
   constructor() {
@@ -79,6 +93,8 @@ class KastDB extends Dexie {
       days: 'date, dirty',
       meta: 'key',
     })
+    // Фото та скріншоти в нотатках і задачах
+    this.version(2).stores({ files: 'id, owner, dirty' })
   }
 }
 

@@ -24,6 +24,26 @@ const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 const COPY_ICON =
   '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2z"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>'
 
+const LINK_ICON =
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>'
+const OPEN_ICON =
+  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>'
+
+/** Посилання цілком (http/https без пробілів) */
+export const URL_RE = /^https?:\/\/[^\s<>"]+$/i
+
+/** Чип-посилання в стилі «кнопки копіювання»: іконка, коротка адреса, кругла кнопка «Відкрити» */
+export function makeLinkChip(url: string) {
+  const chip = document.createElement('span')
+  chip.className = 'note-chip note-link'
+  chip.contentEditable = 'false'
+  chip.dataset.url = url
+  const label = url.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '')
+  chip.innerHTML = `<span class="note-link-icon">${LINK_ICON}</span><span class="note-chip-text">${esc(label)}</span><button type="button" class="note-chip-copy note-chip-open" tabindex="-1" aria-label="Відкрити посилання">${OPEN_ICON}</button>`
+  chip.title = url
+  return chip
+}
+
 /** Чип «кнопка копіювання»: текст + кругла кнопка копіювання */
 export function makeChip(text: string) {
   const chip = document.createElement('span')
@@ -32,7 +52,8 @@ export function makeChip(text: string) {
   chip.innerHTML = `<span class="note-chip-text">${esc(text)}</span><button type="button" class="note-chip-copy" tabindex="-1" aria-label="Копіювати">${COPY_ICON}</button>`
   return chip
 }
-export const chipText = (chip: Element) => chip.querySelector('.note-chip-text')?.textContent ?? ''
+export const chipText = (chip: Element) =>
+  (chip as HTMLElement).dataset?.url ?? chip.querySelector('.note-chip-text')?.textContent ?? ''
 
 export function textToHtml(text: string) {
   if (!text) return '<div><br></div>'
@@ -52,6 +73,10 @@ export function sanitize(html: string) {
       if (n.nodeType !== Node.ELEMENT_NODE) return
       const el = n as HTMLElement
       if (el.tagName === 'BR') return void to.appendChild(document.createElement('br'))
+      if (el.classList.contains('note-link')) {
+        const url = el.dataset.url ?? ''
+        return void to.appendChild(URL_RE.test(url) ? makeLinkChip(url) : document.createTextNode(url))
+      }
       if (el.classList.contains('note-chip')) return void to.appendChild(makeChip(el.querySelector('.note-chip-text')?.textContent ?? el.textContent ?? ''))
       if (el.tagName === 'DIV') {
         const div = document.createElement('div')

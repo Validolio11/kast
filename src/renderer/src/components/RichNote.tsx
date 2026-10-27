@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { cn, ContextMenu, Icon, useToast, type MenuAction } from '@/design-system'
 import { SENT_MARK, TASK_LINE } from '@/data/notes'
 import {
@@ -10,10 +10,12 @@ import {
   FONTS,
   fontStack,
   makeChip,
+  makeLinkChip,
   plainText,
   sanitize,
   styleAt,
   toggleNumbering,
+  URL_RE,
   WEIGHTS,
 } from './richText'
 
@@ -41,7 +43,11 @@ export const RichNote = forwardRef<RichNoteHandle, {
   onLineToTask: (title: string) => Promise<void>
   /** Редагування заблоковане: лише читати, виділяти й копіювати */
   readOnly?: boolean
-}>(function RichNote({ html, placeholder, onChange, onLineToTask, readOnly }, ref) {
+  /** Вставлені чи перетягнуті фото й скріншоти */
+  onImages?: (files: File[]) => void
+  /** Що показати під текстом у тій самій прокрутці (галерея фото) */
+  after?: ReactNode
+}>(function RichNote({ html, placeholder, onChange, onLineToTask, readOnly, onImages, after }, ref) {
   const editor = useRef<HTMLDivElement>(null)
   const lastHtml = useRef<string | null>(null)
   const [empty, setEmpty] = useState(false)
@@ -71,6 +77,21 @@ export const RichNote = forwardRef<RichNoteHandle, {
     lastHtml.current = e.innerHTML
     setEmpty(!plainText(e).trim() && !e.querySelector('.note-chip'))
   }, [html])
+
+  // Підказка лежить поверх і місця не займає: над галереєю фото лишаємо висоту на всю підказку
+  const hasAfter = !!after
+  useLayoutEffect(() => {
+    const e = editor.current
+    if (!e || !hasAfter) return
+    const fit = () => {
+      const h = empty && !readOnly ? parseFloat(getComputedStyle(e, '::before').height) || 0 : 0
+      e.style.minHeight = h ? `${h}px` : ''
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(e)
+    return () => ro.disconnect()
+  }, [hasAfter, empty, readOnly, placeholder])
 
   const select = (range: Range) => {
     const sel = getSelection()
@@ -135,6 +156,30 @@ export const RichNote = forwardRef<RichNoteHandle, {
     },
   }))
 
+  /** Набране посилання стає чипом, щойно після нього ставлять пробіл чи Enter */
+  const linkifyBeforeCaret = (addSpace: boolean) => {
+    const sel = getSelection()
+    if (!sel?.isCollapsed || sel.anchorNode?.nodeType !== Node.TEXT_NODE || !el().contains(sel.anchorNode)) return false
+    const node = sel.anchorNode as Text
+    const before = node.data.slice(0, sel.anchorOffset)
+    const m = before.match(/(https?:\/\/[^\s<>"]+)$/i)
+    if (!m) return false
+    const r = document.createRange()
+    r.setStart(node, sel.anchorOffset - m[1].length)
+    r.setEnd(node, sel.anchorOffset)
+    r.deleteContents()
+    const chip = makeLinkChip(m[1])
+    r.insertNode(chip)
+    const tail = document.createTextNode(addSpace ? ' ' : '')
+    chip.after(tail)
+    const c = document.createRange()
+    c.setStart(tail, tail.length)
+    c.collapse(true)
+    select(c)
+    emit()
+    return true
+  }
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
       e.preventDefault()
@@ -145,6 +190,8 @@ export const RichNote = forwardRef<RichNoteHandle, {
       return
     }
     if (readOnly) return
+    if (e.key === ' ' && linkifyBeforeCaret(true)) return e.preventDefault()
+    if (e.key === 'Enter' && !e.ctrlKey) linkifyBeforeCaret(false)
     // Браузерні Ctrl+B/I/U вставляють <b>/<i>/<u>, які Kast не зберігає. Жирний — нашим стилем, решта вимкнена.
     if (e.ctrlKey && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
       e.preventDefault()
@@ -175,15 +222,39 @@ export const RichNote = forwardRef<RichNoteHandle, {
     }
   }
 
-  // Вставляємо лише текст, без чужої розмітки
+  // Вставляємо лише текст, без чужої розмітки; скріншот — у фото, одне посилання — чипом
   const onPaste = (e: React.ClipboardEvent) => {
     e.preventDefault()
-    document.execCommand('insertText', false, e.clipboardData.getData('text/plain'))
+    if (readOnly) return
+    const images = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'))
+    if (images.length && onImages) return onImages(images)
+    const text = e.clipboardData.getData('text/plain')
+    if (URL_RE.test(text.trim())) {
+      const sel = getSelection()
+      if (!sel?.rangeCount) return
+      const range = sel.getRangeAt(0)
+      range.deleteContents()
+      const chip = makeLinkChip(text.trim())
+      range.insertNode(chip)
+      const tail = document.createTextNode(' ')
+      chip.after(tail)
+      const c = document.createRange()
+      c.setStart(tail, 1)
+      c.collapse(true)
+      select(c)
+      return emit()
+    }
+    document.execCommand('insertText', false, text)
   }
 
   // Перетягнутий текст — теж лише текстом
   const onDrop = (e: React.DragEvent) => {
     if (readOnly) return e.preventDefault()
+    const images = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'))
+    if (images.length && onImages) {
+      e.preventDefault()
+      return onImages(images)
+    }
     const text = e.dataTransfer.getData('text/plain')
     if (!text) return
     e.preventDefault()
@@ -194,6 +265,12 @@ export const RichNote = forwardRef<RichNoteHandle, {
 
   // Кнопка копіювання в чипі
   const onClick = async (e: React.MouseEvent) => {
+    // Посилання відкривається в браузері кліком по чипу
+    const link = (e.target as HTMLElement).closest('.note-link') as HTMLElement | null
+    if (link?.dataset.url) {
+      e.preventDefault()
+      return void window.open(link.dataset.url, '_blank')
+    }
     const btn = (e.target as HTMLElement).closest('.note-chip-copy')
     if (!btn) return
     e.preventDefault()
@@ -238,14 +315,19 @@ export const RichNote = forwardRef<RichNoteHandle, {
   }
 
   const copyItem: MenuAction = menu?.chip
-    ? { label: 'Копіювати', icon: 'copy', onSelect: () => (copy(chipText(menu.chip!)), close()) }
+    ? { label: menu.chip.classList.contains('note-link') ? 'Копіювати посилання' : 'Копіювати', icon: 'copy', onSelect: () => (copy(chipText(menu.chip!)), close()) }
     : { label: 'Копіювати', icon: 'copy', disabled: !hasText, onSelect: () => (copy(menu!.range!.toString()), close()) }
 
   // Заблокована нотатка: з меню лишається тільки копіювання
+  const isLink = !!menu?.chip?.classList.contains('note-link')
+  const openItem: MenuAction = { label: 'Відкрити', icon: 'arrowUpRight', onSelect: () => (window.open(chipText(menu!.chip!), '_blank'), close()) }
   const items: MenuAction[] = readOnly
-    ? [copyItem]
+    ? isLink
+      ? [openItem, copyItem]
+      : [copyItem]
     : menu?.chip
     ? [
+        ...(isLink ? [openItem] : []),
         copyItem,
         {
           label: 'Звичайний текст',
@@ -343,31 +425,48 @@ export const RichNote = forwardRef<RichNoteHandle, {
 
   return (
     <>
+      {/* Текст і галерея фото гортаються разом; клік у порожнє місце під текстом ставить курсор у кінець */}
       <div
-        ref={editor}
-        contentEditable={!readOnly}
-        suppressContentEditableWarning
-        spellCheck
-        role="textbox"
-        aria-multiline
-        aria-label="Текст нотатки"
-        aria-readonly={readOnly || undefined}
-        data-placeholder={placeholder}
-        data-empty={(empty && !readOnly) || undefined}
-        onInput={emit}
-        onKeyDown={onKeyDown}
-        onPaste={onPaste}
-        onDrop={onDrop}
-        onClick={onClick}
-        onContextMenu={onContextMenu}
-        onBlur={emit}
-        className="note-editor min-h-0 w-full flex-1 overflow-y-auto text-[17px] leading-[1.6] font-medium text-ink outline-none"
-      />
+        className="min-h-0 flex-1 overflow-y-auto"
+        onMouseDown={(e) => {
+          if (e.target !== e.currentTarget || readOnly) return
+          e.preventDefault()
+          el().focus()
+          const r = document.createRange()
+          r.selectNodeContents(el())
+          r.collapse(false)
+          select(r)
+        }}
+        onDragOver={(e) => e.dataTransfer.types.includes('Files') && e.preventDefault()}
+        onDrop={(e) => e.target === e.currentTarget && onDrop(e)}
+      >
+        <div
+          ref={editor}
+          contentEditable={!readOnly}
+          suppressContentEditableWarning
+          spellCheck
+          role="textbox"
+          aria-multiline
+          aria-label="Текст нотатки"
+          aria-readonly={readOnly || undefined}
+          data-placeholder={placeholder}
+          data-empty={(empty && !readOnly) || undefined}
+          onInput={emit}
+          onKeyDown={onKeyDown}
+          onPaste={onPaste}
+          onDrop={onDrop}
+          onClick={onClick}
+          onContextMenu={onContextMenu}
+          onBlur={emit}
+          className={cn('note-editor w-full text-[17px] leading-[1.6] font-medium text-ink outline-none', after ? 'min-h-16' : 'min-h-full')}
+        />
+        {after}
+      </div>
       {menu && (
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          label={menu.chip ? 'Дії з кнопкою копіювання' : 'Дії з виділеним'}
+          label={menu.chip ? (isLink ? 'Дії з посиланням' : 'Дії з кнопкою копіювання') : 'Дії з виділеним'}
           items={items}
           onClose={close}
           header={hasText && !menu.chip && !readOnly ? <FormatBar range={menu.range!} onStyle={restyle} /> : undefined}

@@ -292,6 +292,25 @@
     background: var(--color-paper);
     color: var(--color-ink);
   }
+  /* Посилання — той самий чип, але клікабельний: іконка ланцюжка, коротка адреса, «Відкрити» */
+  .note-link {
+    gap: 8px;
+    padding-left: 13px;
+    cursor: pointer;
+  }
+  .note-link:hover {
+    background: var(--color-tile);
+  }
+  .note-link .note-chip-text {
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .note-link-icon {
+    display: grid;
+    color: var(--color-growth);
+  }
   .note-chip.is-copied {
     background: var(--color-growth);
     color: var(--color-ink);

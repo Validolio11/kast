@@ -1,11 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, Card, CheckCircle, cn, ContextMenu, Icon, PageGrid, PulseChip, RoundButton, SegTabs, useToast, type MenuAction } from '@/design-system'
 import { WHEN_OPTIONS } from '@/components/TaskRow'
 import { useEntering } from '@/components/Page'
 import { useTask } from '@/data/hooks'
-import { addSteps, complete, finishStep, remove, setKind, setSteps, takeToToday, toInbox, update } from '@/data/tasks'
+import { addSteps, captureToInbox, complete, finishStep, remove, setKind, setSteps, takeToToday, toInbox, update } from '@/data/tasks'
 import type { Task, TaskKind, TaskStatus, When } from '@/data/db'
 import { pluralWord } from '@/lib/time'
+import { RichNote } from '@/components/RichNote'
+import { textToHtml } from '@/components/richText'
+import { AddImageButton, Attachments } from '@/components/Attachments'
+import { addImages } from '@/data/files'
 
 const KIND_OPTIONS: { value: TaskKind; label: string }[] = [
   { value: 'main', label: 'Головна' },
@@ -23,7 +27,8 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      // Esc, який уже закрив щось поверх (перегляд фото, меню), Фокус не закриває
+      if (e.key === 'Escape' && !e.defaultPrevented) onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -131,21 +136,51 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
           main={
             <>
               <StepCard task={task} />
-              <section className="flex min-h-[320px] flex-col rounded-panel bg-paper p-7 text-ink">
-                <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">Нотатки</h2>
-                <Field
-                  value={task.notes}
-                  onSave={(notes) => update(task.id, { notes })}
-                  placeholder="Деталі, посилання, думки…"
-                  multiline
-                  className="mt-3 flex-1 bg-transparent text-[17px] leading-[1.6] font-medium text-ink placeholder:text-dim"
-                />
-              </section>
+              <TaskNotes task={task} />
             </>
           }
         />
       </div>
     </div>
+  )
+}
+
+/**
+ * Нотатки задачі — той самий редактор, що й у Блокноті: посилання стають чипами,
+ * скріншот вставляється Ctrl+V, фото показуються по три в рядок під текстом.
+ */
+function TaskNotes({ task }: { task: Task }) {
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const pending = useRef<{ notes: string; notesHtml: string } | null>(null)
+  const flush = () => {
+    clearTimeout(timer.current)
+    if (pending.current) update(task.id, pending.current)
+    pending.current = null
+  }
+  useEffect(() => flush, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const onChange = useCallback((html: string, text: string) => {
+    pending.current = { notes: text, notesHtml: html }
+    clearTimeout(timer.current)
+    timer.current = setTimeout(flush, 400)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return (
+    <section className="flex min-h-[320px] flex-col rounded-panel bg-paper p-7 text-ink">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">Нотатки</h2>
+        <AddImageButton onFiles={(files) => addImages(task.id, files)} />
+      </div>
+      <RichNote
+        html={task.notesHtml ?? textToHtml(task.notes)}
+        placeholder="Деталі, посилання, думки…"
+        onChange={onChange}
+        onImages={(files) => addImages(task.id, files)}
+        after={<Attachments owner={task.id} />}
+        onLineToTask={async (t) => {
+          await captureToInbox(t)
+        }}
+      />
+    </section>
   )
 }
 

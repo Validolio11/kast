@@ -4,7 +4,7 @@
 
 create table if not exists public.records (
   user_id    uuid        not null default auth.uid() references auth.users on delete cascade,
-  kind       text        not null check (kind in ('task', 'note', 'day')),
+  kind       text        not null check (kind in ('task', 'note', 'day', 'file')),
   id         text        not null,
   data       jsonb       not null,
   updated_at bigint      not null,           -- час зміни на клієнті (мс), для last-write-wins
@@ -12,6 +12,10 @@ create table if not exists public.records (
   server_ts  timestamptz not null default now(), -- курсор для pull
   primary key (user_id, kind, id)
 );
+
+-- Оновлення для фото (якщо таблицю створено раніше без типу 'file'):
+alter table public.records drop constraint if exists records_kind_check;
+alter table public.records add constraint records_kind_check check (kind in ('task', 'note', 'day', 'file'));
 
 create index if not exists records_pull_idx on public.records (user_id, server_ts);
 

@@ -76,6 +76,8 @@ const paths = {
   removeFormat: (<><path d="M4 7V4h16v3" /><path d="M5 20h6" /><path d="M13 4 8 20" /><path d="m15 15 5 5" /><path d="m20 15-5 5" /></>),
   square: <rect width="14" height="14" x="5" y="5" rx="2" />,
   dot: <circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none" />,
+  image: (<><rect width="18" height="18" x="3" y="3" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></>),
+  link: (<><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></>),
   arrowUp: (<><path d="m5 12 7-7 7 7" /><path d="M12 19V5" /></>),
   arrowDown: (<><path d="M12 5v14" /><path d="m19 12-7 7-7-7" /></>),
   lock: (<><rect width="18" height="11" x="3" y="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>),

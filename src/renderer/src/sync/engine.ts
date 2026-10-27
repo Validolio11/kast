@@ -7,16 +7,17 @@ import { liveQuery } from 'dexie'
 import { useSyncExternalStore } from 'react'
 import type { RealtimeChannel, Session } from '@supabase/supabase-js'
 import type { SyncState } from '@/design-system'
-import { db, getMeta, setMeta, type Day, type Note, type Syncable, type Task } from '@/data/db'
+import { db, getMeta, setMeta, type Day, type FileRec, type Note, type Syncable, type Task } from '@/data/db'
 import { supabase } from './client'
 
-type Kind = 'task' | 'note' | 'day'
-type Row = (Task | Note | Day) & Syncable
+type Kind = 'task' | 'note' | 'day' | 'file'
+type Row = (Task | Note | Day | FileRec) & Syncable
 
 const tables = {
   task: { table: () => db.tasks, key: (r: Row) => (r as Task).id },
   note: { table: () => db.notes, key: (r: Row) => (r as Note).id },
   day: { table: () => db.days, key: (r: Row) => (r as Day).date },
+  file: { table: () => db.files, key: (r: Row) => (r as FileRec).id },
 } as const
 const KINDS = Object.keys(tables) as Kind[]
 
@@ -84,26 +85,41 @@ let again = false
 
 async function push(userId: string) {
   for (const kind of KINDS) {
-    const { table, key } = tables[kind]
-    const dirty = (await table().where('dirty').equals(1).toArray()) as Row[]
-    for (let i = 0; i < dirty.length; i += 500) {
-      const batch = dirty.slice(i, i + 500)
-      const { error } = await supabase!.from('records').upsert(
-        batch.map((r) => {
-          const { dirty: _d, ...data } = r
-          return { user_id: userId, kind, id: key(r), data, updated_at: r.updatedAt, deleted: !!r.deleted }
-        }),
-        { onConflict: 'user_id,kind,id' },
-      )
-      if (error) throw error
-      // Знімаємо dirty лише з тих записів, які не змінилися під час відправлення
-      await db.transaction('rw', table(), async () => {
-        for (const r of batch) {
-          const cur = (await table().get(key(r) as never)) as Row | undefined
-          if (cur && cur.updatedAt === r.updatedAt) await table().update(key(r) as never, { dirty: 0 } as never)
-        }
-      })
+    try {
+      await pushKind(userId, kind)
+    } catch (e) {
+      // Сервер зі старою схемою не знає тип 'file' — фото лишаються на цьому ПК, решта синхронізується
+      if (kind === 'file' && (e as { code?: string }).code === '23514') {
+        console.warn('Фото не синхронізуються: оновіть схему Supabase (supabase/schema.sql)')
+        continue
+      }
+      throw e
     }
+  }
+}
+
+async function pushKind(userId: string, kind: Kind) {
+  const { table, key } = tables[kind]
+  const dirty = (await table().where('dirty').equals(1).toArray()) as Row[]
+  // Фото важкі — відправляємо меншими пачками
+  const size = kind === 'file' ? 10 : 500
+  for (let i = 0; i < dirty.length; i += size) {
+    const batch = dirty.slice(i, i + size)
+    const { error } = await supabase!.from('records').upsert(
+      batch.map((r) => {
+        const { dirty: _d, ...data } = r
+        return { user_id: userId, kind, id: key(r), data, updated_at: r.updatedAt, deleted: !!r.deleted }
+      }),
+      { onConflict: 'user_id,kind,id' },
+    )
+    if (error) throw error
+    // Знімаємо dirty лише з тих записів, які не змінилися під час відправлення
+    await db.transaction('rw', table(), async () => {
+      for (const r of batch) {
+        const cur = (await table().get(key(r) as never)) as Row | undefined
+        if (cur && cur.updatedAt === r.updatedAt) await table().update(key(r) as never, { dirty: 0 } as never)
+      }
+    })
   }
 }
 
@@ -176,10 +192,11 @@ const schedule = (ms = 1500) => {
 /** Коли в Kast з'являється інший акаунт — відправити йому все локальне й почати pull з нуля */
 async function adoptUser(userId: string) {
   if ((await getMeta<string | null>(USER, null)) === userId) return
-  await db.transaction('rw', db.tasks, db.notes, db.days, async () => {
+  await db.transaction('rw', db.tasks, db.notes, db.days, db.files, async () => {
     await db.tasks.toCollection().modify({ dirty: 1 })
     await db.notes.toCollection().modify({ dirty: 1 })
     await db.days.toCollection().modify({ dirty: 1 })
+    await db.files.toCollection().modify({ dirty: 1 })
   })
   await setMeta(CURSOR, '1970-01-01T00:00:00Z')
   await setMeta(USER, userId)
@@ -213,7 +230,7 @@ export function startSync() {
   })
   // Будь-яка локальна зміна (у т. ч. з вікна швидкого запису) → push через 1.5 с
   liveQuery(async () => {
-    const counts = await Promise.all([db.tasks, db.notes, db.days].map((t) => t.where('dirty').equals(1).count()))
+    const counts = await Promise.all([db.tasks, db.notes, db.days, db.files].map((t) => t.where('dirty').equals(1).count()))
     return counts.reduce((a, b) => a + b, 0)
   }).subscribe((n) => n > 0 && schedule())
   window.addEventListener('online', () => schedule(100))
