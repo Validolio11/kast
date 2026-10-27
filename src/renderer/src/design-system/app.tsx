@@ -396,8 +396,10 @@ function AgeScale({ value, tip }: { value: number; tip: string }) {
   const v = Math.max(0, Math.min(1, value))
   return (
     <span role="img" aria-label={tip} data-tip={tip} data-tip-align="end" className="mr-1 grid h-[30px] items-center">
-      <span className="relative block h-3 w-20 overflow-hidden rounded-full bg-white/[0.06] outline-1 -outline-offset-1 outline-white/15">
+      <span className="relative block h-3 w-20 overflow-hidden rounded-full bg-white/[0.06]">
         {v > 0 && <Hatch value={Math.max(v, 0.08) * 100} color="var(--color-growth)" live={v >= 0.85} />}
+        {/* Обводка окремим шаром над штриховкою, щоб не ховалась під заповненням */}
+        <span aria-hidden className="pointer-events-none absolute inset-0 rounded-full shadow-[inset_0_0_0_1px_rgb(255_255_255/0.18)]" />
       </span>
     </span>
   )
