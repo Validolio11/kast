@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Card, CheckCircle, cn, Icon, PageGrid, PulseChip, RoundButton, SegTabs, useToast } from '@/design-system'
+import { Button, Card, CheckCircle, cn, ContextMenu, Icon, PageGrid, PulseChip, RoundButton, SegTabs, useToast, type MenuAction } from '@/design-system'
 import { WHEN_OPTIONS } from '@/components/TaskRow'
 import { useEntering } from '@/components/Page'
 import { useTask } from '@/data/hooks'
-import { addSteps, complete, finishStep, remove, setKind, takeToToday, toInbox, update } from '@/data/tasks'
+import { addSteps, complete, finishStep, remove, setKind, setSteps, takeToToday, toInbox, update } from '@/data/tasks'
 import type { Task, TaskKind, TaskStatus, When } from '@/data/db'
 import { pluralWord } from '@/lib/time'
 
@@ -159,8 +159,64 @@ function StepCard({ task }: { task: Task }) {
   const [celebrate, setCelebrate] = useState(false)
   const [round, setRound] = useState(0)
   const [more, setMore] = useState('')
+  const [listOpen, setListOpen] = useState(false)
+  const [editing, setEditing] = useState<number | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; i: number } | null>(null)
+  // Перетягування мишкою у відкритому списку: звідки тягнемо і куди наведено
+  const [drag, setDrag] = useState<{ from: number; over: number | null } | null>(null)
+  const dropProps = (i: number) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!drag) return
+      e.preventDefault()
+      if (drag.over !== i) setDrag({ ...drag, over: i })
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault()
+      if (drag && drag.from !== i) move(drag.from, i)
+      setDrag(null)
+    },
+  })
   const steps = task.stepsDone ?? 0
   const queued = task.nextSteps?.length ?? 0
+  // Усі кроки одним списком: [0] — поточний, далі черга
+  const all = [task.firstStep, ...(task.nextSteps ?? [])].filter((s) => s.trim())
+
+  const move = (from: number, to: number) => {
+    const next = [...all]
+    const [s] = next.splice(from, 1)
+    next.splice(to, 0, s)
+    setSteps(task.id, next)
+  }
+  const removeAt = (i: number) => {
+    const before = all
+    setSteps(
+      task.id,
+      all.filter((_, j) => j !== i),
+    )
+    toast({ kind: 'info', title: 'Крок видалено', action: { label: 'Скасувати', onClick: () => setSteps(task.id, before) } })
+  }
+  const saveAt = (i: number, text: string) => {
+    setEditing(null)
+    if (!text.trim()) return removeAt(i)
+    if (text.trim() !== all[i]) setSteps(task.id, all.map((s, j) => (j === i ? text : s)))
+  }
+  const openMenu = (e: React.MouseEvent, i: number) => {
+    e.preventDefault()
+    setMenu({ x: e.clientX, y: e.clientY, i })
+  }
+  const menuItems = (i: number): MenuAction[] => [
+    {
+      label: 'Редагувати',
+      icon: 'pencil',
+      // Поточний крок редагується у великому полі, решта — прямо в списку
+      onSelect: () => (setMenu(null), i === 0 ? setRound((r) => r + 1) : (setListOpen(true), setEditing(i))),
+    },
+    ...(i === 0 && all.length > 1 && !listOpen ? [{ label: 'Усі кроки', icon: 'listOrdered', onSelect: () => (setMenu(null), setListOpen(true)) } as MenuAction] : []),
+    { label: 'Зробити поточним', icon: 'chevronsRight', disabled: i === 0, onSelect: () => (setMenu(null), move(i, 0)) },
+    { label: 'Вище', icon: 'arrowUp', disabled: i === 0, onSelect: () => (setMenu(null), move(i, i - 1)) },
+    { label: 'Нижче', icon: 'arrowDown', disabled: i === all.length - 1, onSelect: () => (setMenu(null), move(i, i + 1)) },
+    { label: 'Видалити', icon: 'trashLines', tone: 'danger', onSelect: () => (setMenu(null), removeAt(i)) },
+  ]
   const done = async () => {
     const hadNext = queued > 0
     const undo = await finishStep(task.id)
@@ -179,7 +235,16 @@ function StepCard({ task }: { task: Task }) {
   return (
     <Card className="flex flex-col gap-3 p-7">
       <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">{steps ? 'Наступний крок' : 'Перший крок'}</h2>
-      <div className="flex items-center gap-3">
+      <div
+        className={cn(
+          'flex items-center gap-3 rounded-full transition-shadow',
+          // Поки тягнемо — поле не перехоплює кидок, його приймає вся смуга поточного кроку
+          drag && '[&_input]:pointer-events-none',
+          drag?.over === 0 && 'shadow-[0_0_0_2px_var(--color-growth)]',
+        )}
+        onContextMenu={(e) => task.firstStep && openMenu(e, 0)}
+        {...dropProps(0)}
+      >
         <Field
           value={task.firstStep}
           onSave={(firstStep) => update(task.id, { firstStep: firstStep.trim() })}
@@ -211,11 +276,69 @@ function StepCard({ task }: { task: Task }) {
           className="h-11 w-full rounded-full bg-transparent px-5 text-[14px] font-semibold text-paper caret-growth outline-none placeholder:text-muted hover:bg-canvas/50 focus:bg-canvas"
         />
       )}
+      {/* Черга розгортається лише на вимогу: правий клік по кроку — редагувати, перемістити, видалити */}
+      {listOpen && all.length > 1 && (
+        <ol className="flex flex-col gap-1.5" aria-label="Наступні кроки">
+          {all.slice(1).map((s, k) => {
+            const i = k + 1
+            return (
+              <li
+                key={`${i}-${s}`}
+                draggable={editing !== i}
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = 'move'
+                  setDrag({ from: i, over: null })
+                }}
+                onDragEnd={() => setDrag(null)}
+                {...dropProps(i)}
+                onContextMenu={(e) => openMenu(e, i)}
+                onDoubleClick={() => setEditing(i)}
+                className={cn(
+                  'group flex h-11 cursor-grab items-center gap-3 rounded-full bg-canvas/50 pr-1.5 pl-4 text-[14px] font-semibold text-paper transition-[opacity,box-shadow] active:cursor-grabbing',
+                  drag?.from === i && 'opacity-40',
+                  drag && drag.over === i && drag.from !== i && 'shadow-[0_0_0_2px_var(--color-growth)]',
+                )}
+              >
+                <span className="w-5 shrink-0 text-muted tabular-nums">{i + 1}</span>
+                {editing === i ? (
+                  <input
+                    autoFocus
+                    defaultValue={s}
+                    onBlur={(e) => saveAt(i, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur()
+                      if (e.key === 'Escape') setEditing(null)
+                    }}
+                    aria-label={`Крок ${i + 1}`}
+                    className="min-w-0 flex-1 bg-transparent caret-growth outline-none"
+                  />
+                ) : (
+                  <span className="min-w-0 flex-1 truncate">{s}</span>
+                )}
+                <button
+                  onClick={(e) => openMenu(e, i)}
+                  aria-label={`Дії з кроком ${i + 1}`}
+                  className="grid size-8 shrink-0 place-items-center rounded-full text-muted opacity-0 transition hover:bg-tile hover:text-paper group-hover:opacity-100 focus-visible:opacity-100"
+                >
+                  <Icon name="more" size={16} />
+                </button>
+              </li>
+            )
+          })}
+        </ol>
+      )}
       <p className="px-1 text-[13px] font-semibold text-muted">
-        {steps || queued
-          ? [steps && `Кроків зроблено: ${steps}`, queued && `далі ще ${queued} ${pluralWord(queued, ['крок', 'кроки', 'кроків'])}`].filter(Boolean).join(' · ')
-          : 'Розмите відкладається, конкретне — робиться.'}
+        {steps ? `Кроків зроблено: ${steps}` : !queued && 'Розмите відкладається, конкретне — робиться.'}
+        {steps > 0 && queued > 0 && ' · '}
+        {queued > 0 && (
+          <button onClick={() => setListOpen((o) => !o)} className="font-semibold text-muted underline-offset-2 hover:text-paper hover:underline">
+            далі ще {queued} {pluralWord(queued, ['крок', 'кроки', 'кроків'])} · {listOpen ? 'сховати' : 'показати'}
+          </button>
+        )}
       </p>
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} label={`Крок ${menu.i + 1}`} items={menuItems(menu.i)} onClose={() => setMenu(null)} />
+      )}
     </Card>
   )
 }

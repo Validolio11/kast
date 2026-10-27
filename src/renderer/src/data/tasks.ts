@@ -54,6 +54,12 @@ export async function finishStep(id: string) {
   return () => update(id, before)
 }
 
+/** Записати всі кроки одним списком: перший — поточний, решта — черга */
+export const setSteps = (id: string, all: string[]) => {
+  const clean = all.map((s) => s.trim()).filter(Boolean)
+  return update(id, { firstStep: clean[0] ?? '', nextSteps: clean.slice(1) })
+}
+
 /** Додати кроки в чергу (кілька рядків — кілька кроків). Якщо поточного кроку немає, перший стає поточним. */
 export async function addSteps(id: string, text: string) {
   const t = await db.tasks.get(id)
