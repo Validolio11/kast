@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Button, CaptureField, Card, Icon, InfoRow, ListSection, PulseChip, PulseRow, RowAction, useToast } from '@/design-system'
-import { TaskRow, WHEN_OPTIONS } from '@/components/TaskRow'
+import { ageOf, TaskRow, WHEN_OPTIONS } from '@/components/TaskRow'
 import { Page } from '@/components/Page'
 import { useDay, useLeftovers, useStatus, useToday } from '@/data/hooks'
 import { addToToday, MAIN_LIMIT, markPlanned, SMALL_LIMIT, takeToToday, toInbox, type Placement } from '@/data/tasks'
 import type { Task } from '@/data/db'
-import { age, fmtLongDay, fromKey } from '@/lib/time'
+import { fmtLongDay } from '@/lib/time'
 import { useHour } from '@/lib/hooks'
 
 const placedToast: Record<Exclude<Placement, 'main'>, string> = {
@@ -188,7 +188,7 @@ function PlanDay({
 }) {
   // Незавершені з минулих днів показані окремо — у «З Вхідних» їх не дублюємо
   const fresh = inbox.filter((t) => !t.planDate).sort((a, b) => b.inboxAt - a.inboxAt).slice(0, 7)
-  const row = (t: Task, meta: string) => (
+  const row = (t: Task) => (
     <PulseRow
       key={t.id}
       leading={
@@ -201,7 +201,7 @@ function PlanDay({
         </button>
       }
       title={t.title}
-      meta={meta}
+      age={ageOf(t)}
       onClick={() => onTake(t.id)}
     />
   )
@@ -221,13 +221,13 @@ function PlanDay({
       {leftovers.length > 0 && (
         <>
           <span className="px-3 pt-2 text-[13px] font-extrabold text-muted">Не завершено раніше</span>
-          {leftovers.map((t) => row(t, t.planDate ? age(fromKey(t.planDate).getTime()) : ''))}
+          {leftovers.map(row)}
         </>
       )}
       {fresh.length > 0 && (
         <>
           <span className="px-3 pt-2 text-[13px] font-extrabold text-muted">З Вхідних · {inbox.length}</span>
-          {fresh.map((t) => row(t, age(t.inboxAt)))}
+          {fresh.map(row)}
         </>
       )}
     </section>

@@ -395,9 +395,9 @@ export function PulseRow({
 function AgeScale({ value, tip }: { value: number; tip: string }) {
   const v = Math.max(0, Math.min(1, value))
   return (
-    <span role="img" aria-label={tip} data-tip={tip} className="mr-1 grid h-[30px] items-center">
-      <span className="relative block h-3 w-20 overflow-hidden rounded-full bg-tile">
-        <Hatch value={Math.max(v, 0.08) * 100} color="var(--color-growth)" live={v >= 0.85} />
+    <span role="img" aria-label={tip} data-tip={tip} data-tip-align="end" className="mr-1 grid h-[30px] items-center">
+      <span className="relative block h-3 w-20 overflow-hidden rounded-full bg-white/[0.06] outline-1 -outline-offset-1 outline-white/15">
+        {v > 0 && <Hatch value={Math.max(v, 0.08) * 100} color="var(--color-growth)" live={v >= 0.85} />}
       </span>
     </span>
   )

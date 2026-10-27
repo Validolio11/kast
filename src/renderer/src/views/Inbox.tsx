@@ -90,7 +90,6 @@ export function Inbox({
                     key={t.id}
                     task={t}
                     onOpen={onOpen}
-                    meta={<span className="tabular-nums">{age(t.inboxAt)}</span>}
                     actions={
                       <>
                         <RowAction icon="sun" label="На сьогодні" onClick={() => take(t.id)} />
