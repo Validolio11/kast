@@ -45,7 +45,7 @@ export function Inbox({
 
   const del = async (id: string) => {
     await remove(id)
-    toast({ kind: 'info', title: 'Задачу видалено', action: { label: 'Скасувати', onClick: () => update(id, { deleted: 0 }) } })
+    toast({ kind: 'info', icon: 'trash', title: 'Задачу видалено', action: { label: 'Скасувати', onClick: () => update(id, { deleted: 0 }) } })
   }
 
   return (

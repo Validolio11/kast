@@ -208,6 +208,7 @@ type ToastKind = 'success' | 'info' | 'error'
 interface ToastItem {
   id: number
   kind: ToastKind
+  icon?: IconName
   title: string
   text?: string
   ms: number
@@ -218,14 +219,14 @@ export interface ToastAction {
   label: string
   onClick: () => void
 }
-type ToastInput = { kind?: ToastKind; title: string; text?: string; ms?: number; action?: ToastAction }
+type ToastInput = { kind?: ToastKind; icon?: IconName; title: string; text?: string; ms?: number; action?: ToastAction }
 const ToastCtx = createContext<(t: ToastInput) => void>(() => {})
 export const useToast = () => useContext(ToastCtx)
 
 const toastStyle: Record<ToastKind, { icon: IconName; chip: string; bar: string }> = {
-  success: { icon: 'check', chip: 'bg-pulse text-night', bar: '#13f287' },
-  info: { icon: 'info', chip: 'bg-volt text-white', bar: '#8f5bff' },
-  error: { icon: 'x', chip: 'bg-signal text-night', bar: '#ff4d4f' },
+  success: { icon: 'check', chip: 'bg-pulse text-night', bar: 'var(--color-growth)' },
+  info: { icon: 'info', chip: 'bg-volt text-white', bar: 'var(--color-violet)' },
+  error: { icon: 'x', chip: 'bg-signal text-night', bar: 'var(--color-signal)' },
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -237,7 +238,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       const id = ++counter.current
       setItems((l) => [
         ...l.slice(-3),
-        { id, kind: t.kind ?? 'success', title: t.title, text: t.text, ms: t.ms ?? (t.action ? 6000 : 4000), action: t.action },
+        { ...t, id, kind: t.kind ?? 'success', ms: Math.max(1000, t.ms ?? (t.action ? 6000 : 4000)) },
       ])
     },
     [],
@@ -249,8 +250,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         <div
           role="region"
           aria-label="Сповіщення"
-          aria-live="polite"
-          className="pointer-events-none fixed inset-x-0 bottom-6 z-[120] flex flex-col items-center gap-3 px-4"
+          className="no-drag pointer-events-none fixed inset-x-0 bottom-6 z-[120] flex flex-col items-center gap-3 px-4"
         >
           {items.map((t) => (
             <ToastView key={t.id} item={t} onDone={() => dismiss(t.id)} />
@@ -263,39 +263,60 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 function ToastView({ item, onDone }: { item: ToastItem; onDone: () => void }) {
-  const [paused, setPaused] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const [hidden, setHidden] = useState(() => document.hidden)
   const [elapsed, setElapsed] = useState(0)
+  const elapsedRef = useRef(0)
+  const onDoneRef = useRef(onDone)
+  onDoneRef.current = onDone
+  const paused = hovered || focused || hidden
+  useEffect(() => {
+    const onVisibility = () => setHidden(document.hidden)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [])
   useEffect(() => {
     if (paused) return
-    const start = performance.now() - elapsed
+    const start = performance.now() - elapsedRef.current
     let raf = 0
     const tick = (now: number) => {
-      const e = now - start
+      const e = Math.min(item.ms, now - start)
+      elapsedRef.current = e
       setElapsed(e)
-      if (e >= item.ms) onDone()
+      if (e >= item.ms) onDoneRef.current()
       else raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paused])
+  }, [paused, item.ms])
   const s = toastStyle[item.kind]
   return (
     <div
-      role="status"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      className="pointer-events-auto relative flex w-full max-w-md animate-toast-in items-center gap-4 overflow-hidden rounded-capsule bg-paper py-3 pr-3 pl-3 text-night shadow-[0_24px_60px_-12px_rgba(0,0,0,0.9)]"
+      role={item.kind === 'error' ? 'alert' : 'status'}
+      aria-atomic="true"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocusCapture={() => setFocused(true)}
+      onBlurCapture={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false)
+      }}
+      className="pointer-events-auto relative flex w-full max-w-md animate-toast-in items-center gap-4 rounded-capsule bg-paper py-3 pr-3 pl-3 text-night shadow-[0_24px_60px_-12px_rgba(0,0,0,0.9)]"
     >
-      <span className={cn('grid size-11 shrink-0 place-items-center rounded-full', s.chip)}>
-        <Icon name={s.icon} size={20} />
+      <span aria-hidden className={cn('relative grid size-11 shrink-0 place-items-center rounded-full', s.chip)}>
+        <svg className="pointer-events-none absolute -inset-1 size-[52px] -rotate-90" viewBox="0 0 52 52" fill="none">
+          <circle cx="26" cy="26" r="24" stroke="currentColor" strokeWidth="2" className="text-night/10" />
+          <circle cx="26" cy="26" r="24" pathLength="1" stroke={s.bar} strokeWidth="2" strokeLinecap="round" strokeDasharray="1" strokeDashoffset={Math.min(1, elapsed / item.ms)} />
+        </svg>
+        <Icon name={item.icon ?? s.icon} size={20} />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[15px] font-bold tracking-tight">{item.title}</div>
-        {item.text && <div className="truncate text-[13px] text-night/60">{item.text}</div>}
+        <div className="text-[15px] font-bold tracking-tight break-words">{item.title}</div>
+        {item.text && <div className="text-[13px] break-words text-night/60">{item.text}</div>}
       </div>
       {item.action && (
         <button
+          type="button"
           onClick={() => {
             item.action!.onClick()
             onDone()
@@ -306,18 +327,13 @@ function ToastView({ item, onDone }: { item: ToastItem; onDone: () => void }) {
         </button>
       )}
       <button
+        type="button"
         aria-label="Закрити сповіщення"
         onClick={onDone}
         className="grid size-10 shrink-0 place-items-center rounded-full bg-night/8 transition hover:bg-night/15 active:scale-90"
       >
         <Icon name="x" size={16} />
       </button>
-      {/* Відлік — та сама капсула з відступом, що й усі прогрес-лінії */}
-      <span
-        aria-hidden
-        className="absolute bottom-1.5 left-8 h-1 rounded-full"
-        style={{ width: `calc((100% - 64px) * ${Math.max(0, 1 - elapsed / item.ms)})`, background: s.bar }}
-      />
     </div>
   )
 }

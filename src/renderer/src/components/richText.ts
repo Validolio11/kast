@@ -61,6 +61,11 @@ const SIZES: ImgSize[] = ['s', 'm', 'l']
 const WRAPS: ImgWrap[] = ['left', 'right', 'inline', 'block']
 const FILE_ID = /^[0-9a-f-]{36}$/i
 
+/** Окрема ручка лишається доступною навіть коли всередині відео вже працює iframe. */
+function mediaDragHandle() {
+  return '<button type="button" class="note-media-drag" draggable="true" aria-label="Перемістити медіа" title="Перетягніть, щоб перемістити · Alt+↑ / Alt+↓"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg></button>'
+}
+
 /**
  * Фото всередині тексту, як у Word: розмір (третина / половина / уся ширина) і обтікання.
  * У HTML зберігаємо лише id файлу — саме зображення підставляється з бази при показі.
@@ -72,13 +77,19 @@ export function makeImage(id: string, size: ImgSize = 'm', wrap: ImgWrap = 'left
   box.dataset.file = id
   box.dataset.size = size
   box.dataset.wrap = wrap
-  box.innerHTML = '<img alt="" draggable="false">'
+  box.draggable = true
+  box.innerHTML = '<img alt="" draggable="false">' + mediaDragHandle()
   return box
 }
 
 /** HTML для збереження: без вбудованих зображень і плеєрів (лише посилання на файли й відео) */
 export function serialize(editor: HTMLElement) {
   const copy = editor.cloneNode(true) as HTMLElement
+  copy.querySelectorAll('.note-media-drag').forEach((handle) => handle.remove())
+  copy.querySelectorAll<HTMLElement>('.note-img').forEach((box) => {
+    box.removeAttribute('draggable')
+    box.classList.remove('is-moving', 'is-playing')
+  })
   copy.querySelectorAll('.note-video').forEach((v) => (v.innerHTML = ''))
   copy.querySelectorAll('.note-img img').forEach((img) => img.removeAttribute('src'))
   return copy.innerHTML
@@ -163,7 +174,7 @@ const PLAY_ICON =
 export function videoCover(box: HTMLElement) {
   const info = parseVideo(box.dataset.url ?? '')
   if (!info) return
-  box.innerHTML = `<span class="note-video-frame">${info.thumb ? `<img src="${info.thumb}" alt="" draggable="false">` : ''}<span class="note-video-badge">${esc(info.label)}</span><span class="note-video-play">${PLAY_ICON}</span></span>`
+  box.innerHTML = `<span class="note-video-frame">${info.thumb ? `<img src="${info.thumb}" alt="" draggable="false">` : ''}<span class="note-video-badge">${esc(info.label)}</span><span class="note-video-play">${PLAY_ICON}</span></span>` + mediaDragHandle()
 }
 
 /**
@@ -177,6 +188,7 @@ export function makeVideo(url: string, size: ImgSize = 'm', wrap: ImgWrap = 'lef
   box.dataset.url = url
   box.dataset.size = size
   box.dataset.wrap = wrap
+  box.draggable = true
   videoCover(box)
   return box
 }

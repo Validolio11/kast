@@ -1,0 +1,39 @@
+/* Медіа використовують ті самі canvas/paper та округлі керування, що й меню Kast. */
+.note-editor .note-img { position: relative; }
+.note-media-drag {
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  left: 10px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--color-paper-line);
+  border-radius: 17px;
+  background: var(--color-canvas);
+  color: var(--color-paper);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+.note-editor .note-video-badge { left: 52px; }
+.note-editor[data-media-moving] iframe,
+.note-editor[data-media-moving] video { pointer-events: none; }
+.note-img:hover > .note-media-drag,
+.note-img:focus-within > .note-media-drag { opacity: 1; }
+.note-media-drag:focus-visible { outline: 2px solid var(--color-growth); outline-offset: 2px; }
+.note-media-drag:hover { background: var(--color-steel); }
+.note-media-drag:active { cursor: grabbing; }
+.note-img.is-moving { opacity: .4; }
+.note-media-drop-marker {
+  position: fixed;
+  z-index: 80;
+  border-radius: 3px;
+  background: var(--color-growth);
+  box-shadow: 0 0 0 2px var(--color-paper);
+  pointer-events: none;
+}
+.note-editor[aria-readonly='true'] .note-media-drag { display: none; }
+.note-editor[aria-readonly='true'] .note-video-badge { left: 10px; }
+@media (prefers-reduced-motion: reduce) { .note-media-drag { transition: none; } }

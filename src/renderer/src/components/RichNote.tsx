@@ -1,10 +1,12 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { liveQuery } from 'dexie'
-import { cn, ContextMenu, Icon, useToast, type MenuAction } from '@/design-system'
+import { cn, ContextMenu, Icon, useToast, type IconName, type MenuAction } from '@/design-system'
 import { SENT_MARK, TASK_LINE } from '@/data/notes'
 import { db, type FileRec } from '@/data/db'
 import { addImages, downloadImage } from '@/data/files'
 import { VideoViewer, Viewer } from './Attachments'
+import { adjacentMediaPoint, MEDIA_DRAG_TYPE, mediaDropPoint, moveMedia, type MediaDropPoint } from './mediaMove'
+import './noteMedia.css'
 import {
   alignBlocks,
   alignOf,
@@ -72,6 +74,10 @@ export const RichNote = forwardRef<RichNoteHandle, {
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [viewer, setViewer] = useState<{ files: FileRec[]; index: number } | null>(null)
   const [video, setVideo] = useState<string | null>(null)
+  const mediaDrag = useRef<HTMLElement | null>(null)
+  const [mediaMoving, setMediaMoving] = useState(false)
+  const [dropMarker, setDropMarker] = useState<MediaDropPoint['marker'] | null>(null)
+  const suppressMediaClickUntil = useRef(0)
   const toast = useToast()
 
   const el = () => editor.current!
@@ -204,8 +210,9 @@ export const RichNote = forwardRef<RichNoteHandle, {
     emit()
     toast(
       before === undefined
-        ? { title }
+        ? { kind: 'info', title }
         : {
+            kind: 'info',
             title,
             action: {
               label: 'Скасувати',
@@ -282,6 +289,14 @@ export const RichNote = forwardRef<RichNoteHandle, {
   }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    const handle = (e.target as HTMLElement).closest('.note-media-drag')
+    if (handle && !readOnly && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault()
+      e.stopPropagation()
+      const box = handle.closest<HTMLElement>('.note-img')
+      if (box) moveAdjacent(box, e.key === 'ArrowUp' ? -1 : 1)
+      return
+    }
     if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
       e.preventDefault()
       const sel = getSelection()
@@ -353,19 +368,110 @@ export const RichNote = forwardRef<RichNoteHandle, {
     document.execCommand('insertText', false, text)
   }
 
-  // Перетягнутий текст — теж лише текстом
+  const clearMediaDrag = () => {
+    mediaDrag.current?.classList.remove('is-moving')
+    mediaDrag.current = null
+    setMediaMoving(false)
+    setDropMarker(null)
+  }
+
+  const moveAndNotify = (box: HTMLElement, destination: Range) => {
+    const root = el()
+    const original = document.createRange()
+    original.setStartBefore(box)
+    original.collapse(true)
+    if (!moveMedia(root, box, destination)) return false
+    emit()
+    toast({
+      kind: 'info',
+      icon: 'menu',
+      title: box.classList.contains('note-video') ? 'Відео переміщено' : 'Фото переміщено',
+      action: {
+        label: 'Скасувати',
+        onClick: () => {
+          // Повертаємо лише медіа: текст, дописаний після переміщення, не втрачається.
+          if (!root.isConnected || root.getAttribute('aria-readonly') === 'true' || !root.contains(box) || !root.contains(original.startContainer)) return
+          if (moveMedia(root, box, original.cloneRange())) emit()
+        },
+      },
+    })
+    return true
+  }
+
+  const onDragStart = (e: React.DragEvent) => {
+    const box = (e.target as HTMLElement).closest<HTMLElement>('.note-img')
+    if (!box || !el().contains(box)) return
+    if (readOnly) return e.preventDefault()
+    mediaDrag.current = box
+    setMediaMoving(true)
+    setMenu(null)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.clearData()
+    e.dataTransfer.setData(MEDIA_DRAG_TYPE, 'move')
+    e.dataTransfer.setDragImage(box, Math.min(30, box.clientWidth / 2), 20)
+    box.classList.add('is-moving')
+  }
+
+  const onDragOver = (e: React.DragEvent) => {
+    if (readOnly && (e.dataTransfer.types.includes(MEDIA_DRAG_TYPE) || e.dataTransfer.types.includes('Files'))) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'none'
+      return
+    }
+    if (!e.dataTransfer.types.includes(MEDIA_DRAG_TYPE)) {
+      if (e.dataTransfer.types.includes('Files')) e.preventDefault()
+      return
+    }
+    e.preventDefault()
+    if (readOnly || !mediaDrag.current) {
+      e.dataTransfer.dropEffect = 'none'
+      return
+    }
+    e.dataTransfer.dropEffect = 'move'
+    const point = mediaDropPoint(el(), mediaDrag.current, e.target, e.clientX, e.clientY)
+    setDropMarker(point?.marker ?? null)
+    const scroll = e.currentTarget as HTMLElement
+    const rect = scroll.getBoundingClientRect()
+    if (e.clientY < rect.top + 40) scroll.scrollTop -= 14
+    else if (e.clientY > rect.bottom - 40) scroll.scrollTop += 14
+  }
+
+  const moveAdjacent = (box: HTMLElement, direction: -1 | 1) => {
+    const destination = adjacentMediaPoint(el(), box, direction)
+    if (!destination) return
+    if (!moveAndNotify(box, destination)) return
+    box.querySelector<HTMLButtonElement>('.note-media-drag')?.focus()
+    box.scrollIntoView({ block: 'nearest' })
+  }
+
+  // Медіа переноситься як атомарний вузол; чужий текст — лише без розмітки.
   const onDrop = (e: React.DragEvent) => {
     if (readOnly) return e.preventDefault()
+    if (e.dataTransfer.types.includes(MEDIA_DRAG_TYPE)) {
+      e.preventDefault()
+      const moving = mediaDrag.current
+      // Не копіюємо внутрішній drag у іншу нотатку: фото належить своїй нотатці.
+      if (!moving) return
+      const point = mediaDropPoint(el(), moving, e.target, e.clientX, e.clientY)
+      clearMediaDrag()
+      suppressMediaClickUntil.current = performance.now() + 250
+      if (!point || !moveAndNotify(moving, point.range)) return
+      const range = document.createRange()
+      range.setStartAfter(moving)
+      range.collapse(true)
+      lastRange.current = range.cloneRange()
+      return
+    }
     const images = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'))
     if (images.length && imageOwner) {
       e.preventDefault()
       // Фото лягає туди, куди його кинули
-      return void insertImages(images, document.caretRangeFromPoint?.(e.clientX, e.clientY))
+      return void insertImages(images, mediaDropPoint(el(), null, e.target, e.clientX, e.clientY)?.range)
     }
     const text = e.dataTransfer.getData('text/plain')
     if (!text) return
     e.preventDefault()
-    const range = document.caretRangeFromPoint?.(e.clientX, e.clientY)
+    const range = mediaDropPoint(el(), null, e.target, e.clientX, e.clientY)?.range
     if (range) select(range)
     document.execCommand('insertText', false, text)
   }
@@ -374,6 +480,10 @@ export const RichNote = forwardRef<RichNoteHandle, {
   const onClick = async (e: React.MouseEvent) => {
     // Клік по фото — перегляд у повному розмірі
     const target = e.target as HTMLElement
+    if (target.closest('.note-media-drag') || performance.now() < suppressMediaClickUntil.current) {
+      e.preventDefault()
+      return
+    }
     const vid = target.closest('.note-video') as HTMLElement | null
     if (vid) {
       e.preventDefault()
@@ -428,8 +538,9 @@ export const RichNote = forwardRef<RichNoteHandle, {
   /** Фото прибирається з тексту (зі «Скасувати») */
   const removeImageBox = (box: HTMLElement) => {
     const before = snapshot()
+    const title = box.classList.contains('note-video') ? 'Відео прибрано' : 'Фото прибрано'
     box.remove()
-    done('Фото прибрано', before)
+    done(title, before)
   }
   /** Розмір чи обтікання фото змінюється одразу, меню лишається відкритим */
   const restyleImage = (box: HTMLElement, patch: { size?: ImgSize; wrap?: ImgWrap }) => {
@@ -484,6 +595,12 @@ export const RichNote = forwardRef<RichNoteHandle, {
       ]
     : []
   const isVideo = !!imgBox?.classList.contains('note-video')
+  const moveItems: MenuAction[] = imgBox && !readOnly
+    ? [
+        { label: 'Перемістити вище', icon: 'arrowUp', disabled: !adjacentMediaPoint(el(), imgBox, -1), onSelect: () => (close(), moveAdjacent(imgBox, -1)) },
+        { label: 'Перемістити нижче', icon: 'arrowDown', disabled: !adjacentMediaPoint(el(), imgBox, 1), onSelect: () => (close(), moveAdjacent(imgBox, 1)) },
+      ]
+    : []
   const videoItems: MenuAction[] = isVideo
     ? [
         { label: 'Розгорнути плеєр', icon: 'play', onSelect: () => (close(), expandVideo(imgBox!)) },
@@ -507,9 +624,9 @@ export const RichNote = forwardRef<RichNoteHandle, {
       ]
     : []
   const items: MenuAction[] = isVideo
-    ? videoItems
+    ? [...videoItems, ...moveItems]
     : imgBox
-    ? imageItems
+    ? [...imageItems, ...moveItems]
     : readOnly
     ? isLink
       ? [openItem, copyItem]
@@ -640,7 +757,15 @@ export const RichNote = forwardRef<RichNoteHandle, {
           r.collapse(false)
           select(r)
         }}
-        onDragOver={(e) => e.dataTransfer.types.includes('Files') && e.preventDefault()}
+        onDragOver={onDragOver}
+        onDragLeave={(e) => {
+          if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return
+          setDropMarker(null)
+        }}
+        onDragEnd={() => {
+          suppressMediaClickUntil.current = performance.now() + 250
+          clearMediaDrag()
+        }}
         onDrop={(e) => e.target === e.currentTarget && onDrop(e)}
       >
         <div
@@ -652,11 +777,13 @@ export const RichNote = forwardRef<RichNoteHandle, {
           aria-multiline
           aria-label="Текст нотатки"
           aria-readonly={readOnly || undefined}
+          data-media-moving={mediaMoving || undefined}
           data-placeholder={placeholder}
           data-empty={(empty && !readOnly) || undefined}
           onInput={emit}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
+          onDragStart={onDragStart}
           onDrop={onDrop}
           onClick={onClick}
           onContextMenu={onContextMenu}
@@ -664,6 +791,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
           className="note-editor min-h-full w-full text-[17px] leading-[1.6] font-medium text-ink outline-none"
         />
       </div>
+      {dropMarker && <span aria-hidden className="note-media-drop-marker" style={dropMarker} />}
       {menu && (
         <ContextMenu
           x={menu.x}
@@ -737,28 +865,31 @@ const IMG_SIZES: { value: ImgSize; label: string }[] = [
   { value: 'm', label: 'Середній' },
   { value: 'l', label: 'Великий' },
 ]
-const IMG_WRAPS: { value: ImgWrap; label: string }[] = [
-  { value: 'left', label: 'Ліворуч' },
-  { value: 'right', label: 'Праворуч' },
-  { value: 'inline', label: 'У рядку' },
-  { value: 'block', label: 'Окремо' },
+const IMG_WRAPS: { value: ImgWrap; label: string; icon: IconName }[] = [
+  { value: 'left', label: 'Ліворуч — текст праворуч', icon: 'wrapLeft' },
+  { value: 'right', label: 'Праворуч — текст ліворуч', icon: 'wrapRight' },
+  { value: 'inline', label: 'У рядку з текстом', icon: 'wrapInline' },
+  { value: 'block', label: 'Окремим блоком', icon: 'wrapBlock' },
 ]
 
 /** Верх меню фото: розмір і обтікання текстом, як у Word */
 function ImageBar({ box, onChange }: { box: HTMLElement; onChange: (patch: { size?: ImgSize; wrap?: ImgWrap }) => void }) {
   const [, redraw] = useState(0)
-  const row = <T extends string>(label: string, options: { value: T; label: string }[], cur: string, set: (v: T) => void) => (
+  const row = <T extends string>(label: string, options: { value: T; label: string; icon?: IconName }[], cur: string, set: (v: T) => void) => (
     <div className="flex flex-col gap-1">
       <span className="px-1 text-[12px] font-bold text-muted">{label}</span>
       <div role="group" aria-label={label} className="flex gap-0.5 rounded-[19px] bg-tile p-[3px]">
         {options.map((o) => (
           <button
             key={o.value}
+            type="button"
+            aria-label={o.label}
+            title={o.label}
             aria-pressed={o.value === cur}
             onClick={() => (set(o.value), redraw((n) => n + 1))}
-            className={cn('h-[34px] flex-1 rounded-2xl px-2 text-[13px] font-bold', o.value === cur ? 'bg-paper text-ink' : 'text-white hover:bg-steel')}
+            className={cn('grid h-[34px] min-w-0 flex-1 place-items-center rounded-2xl px-2 text-[13px] font-bold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-growth', o.value === cur ? 'bg-paper text-ink' : 'text-white hover:bg-steel')}
           >
-            {o.label}
+            {o.icon ? <Icon name={o.icon} size={21} /> : o.label}
           </button>
         ))}
       </div>

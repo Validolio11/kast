@@ -123,7 +123,7 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
                 onClick={async () => {
                   await remove(task.id)
                   onClose()
-                  toast({ kind: 'info', title: 'Задачу видалено', action: { label: 'Скасувати', onClick: () => update(task.id, { deleted: 0 }) } })
+                  toast({ kind: 'info', icon: 'trash', title: 'Задачу видалено', action: { label: 'Скасувати', onClick: () => update(task.id, { deleted: 0 }) } })
                 }}
                 className="flex h-11 items-center gap-2 self-start rounded-full px-4 text-[14px] font-bold text-muted transition-colors hover:bg-tile hover:text-danger-text"
               >
@@ -230,7 +230,7 @@ function StepCard({ task }: { task: Task }) {
       task.id,
       all.filter((_, j) => j !== i),
     )
-    toast({ kind: 'info', title: 'Крок видалено', action: { label: 'Скасувати', onClick: () => setSteps(task.id, before) } })
+    toast({ kind: 'info', icon: 'trash', title: 'Крок видалено', action: { label: 'Скасувати', onClick: () => setSteps(task.id, before) } })
   }
   const saveAt = (i: number, text: string) => {
     setEditing(null)

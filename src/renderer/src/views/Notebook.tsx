@@ -206,6 +206,7 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
     openPage(i < page ? page - 1 : Math.min(page, last))
     toast({
       kind: 'info',
+      icon: 'trash',
       title: `Сторінку ${i + 1} видалено`,
       action: {
         label: 'Скасувати',
@@ -229,7 +230,7 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
   const toggleLock = () => {
     flush()
     updateNote(note.id, { locked: locked ? undefined : 1 })
-    toast({ title: locked ? 'Редагування увімкнено' : 'Редагування заблоковано', text: locked ? undefined : 'Текст можна читати й копіювати' })
+    toast({ kind: 'info', icon: locked ? 'lockOpen' : 'lock', title: locked ? 'Редагування увімкнено' : 'Редагування заблоковано', text: locked ? undefined : 'Текст можна читати й копіювати' })
   }
 
   return (
@@ -345,11 +346,11 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
           tone="paper-line"
           label="Видалити нотатку"
           onClick={async () => {
-            if (locked) return toast({ kind: 'info', title: 'Нотатку заблоковано', text: 'Натисніть «Редагувати», щоб її видалити' })
+            if (locked) return toast({ kind: 'info', icon: 'lock', title: 'Нотатку заблоковано', text: 'Натисніть «Редагувати», щоб її видалити' })
             flush()
             await removeNote(note.id)
             onDeleted()
-            toast({ kind: 'info', title: 'Нотатку видалено', action: { label: 'Скасувати', onClick: () => updateNote(note.id, { deleted: 0 }) } })
+            toast({ kind: 'info', icon: 'trash', title: 'Нотатку видалено', action: { label: 'Скасувати', onClick: () => updateNote(note.id, { deleted: 0 }) } })
           }}
         />
       </div>
