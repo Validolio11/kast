@@ -389,7 +389,7 @@ export function PulseRow({
 }
 
 /**
- * Шкала старіння: маленька заокруглена капсула з фіолетовою штриховкою Hatch.
+ * Шкала старіння: маленька заокруглена капсула з зеленою штриховкою Hatch.
  * Заповнюється з віком задачі; останні дні перед «Колись» штрихи рухаються. Без червоного «прострочено».
  */
 function AgeScale({ value, tip }: { value: number; tip: string }) {
@@ -397,7 +397,7 @@ function AgeScale({ value, tip }: { value: number; tip: string }) {
   return (
     <span role="img" aria-label={tip} data-tip={tip} className="mr-1 grid h-[30px] items-center">
       <span className="relative block h-3 w-20 overflow-hidden rounded-full bg-tile">
-        <Hatch value={Math.max(v, 0.08) * 100} color="var(--color-violet)" live={v >= 0.85} />
+        <Hatch value={Math.max(v, 0.08) * 100} color="var(--color-growth)" live={v >= 0.85} />
       </span>
     </span>
   )
