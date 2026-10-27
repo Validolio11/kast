@@ -33,7 +33,7 @@ export function Notebook({ captureRef }: { captureRef: React.RefObject<HTMLInput
     <Page
       light="Мій"
       heavy="блокнот"
-      sub={`${notes.length} ${pluralWord(notes.length, ['нотатка', 'нотатки', 'нотаток'])} · рядок із [] + Enter — і це задача`}
+      sub={`${notes.length} ${pluralWord(notes.length, ['нотатка', 'нотатки', 'нотаток'])}`}
       fill
       side={
         <>
@@ -269,7 +269,7 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
           key={page}
           ref={editorRef}
           html={html}
-          placeholder={'Думки, плани, протокол зустрічі…\n[] Рядок із дужками + Enter стане задачею\nПравий клік по виділеному — шрифт, нумерація, кнопка копіювання'}
+          placeholder="Напишіть щось…"
           onChange={onText}
           readOnly={locked}
           imageOwner={note.id}
