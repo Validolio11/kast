@@ -72,7 +72,7 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
           side={
             <>
               {isToday && <Timer task={task} />}
-              <Card className="flex flex-col gap-5 p-5">
+              <Card className="flex flex-col gap-4 p-7">
                 {isToday ? (
                   <>
                     <Group label="Коли зроблю">
@@ -131,7 +131,7 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
           main={
             <>
               <StepCard task={task} />
-              <section className="flex min-h-[320px] flex-col rounded-panel bg-paper p-8 text-ink">
+              <section className="flex min-h-[320px] flex-col rounded-panel bg-paper p-7 text-ink">
                 <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">Нотатки</h2>
                 <Field
                   value={task.notes}
@@ -294,7 +294,7 @@ function StepCard({ task }: { task: Task }) {
                 onContextMenu={(e) => openMenu(e, i)}
                 onDoubleClick={() => setEditing(i)}
                 className={cn(
-                  'group flex h-11 cursor-grab items-center gap-3 rounded-full bg-canvas/50 pr-1.5 pl-4 text-[14px] font-semibold text-paper transition-[opacity,box-shadow] active:cursor-grabbing',
+                  'group flex h-11 cursor-grab items-center gap-3 rounded-full bg-canvas/50 pr-1.5 pl-5 text-[14px] font-semibold text-paper transition-[opacity,box-shadow] active:cursor-grabbing',
                   drag?.from === i && 'opacity-40',
                   drag && drag.over === i && drag.from !== i && 'shadow-[0_0_0_2px_var(--color-growth)]',
                 )}
@@ -327,7 +327,7 @@ function StepCard({ task }: { task: Task }) {
           })}
         </ol>
       )}
-      <p className="px-1 text-[13px] font-semibold text-muted">
+      <p className="text-[13px] font-semibold text-muted">
         {steps ? `Кроків зроблено: ${steps}` : !queued && 'Розмите відкладається, конкретне — робиться.'}
         {steps > 0 && queued > 0 && ' · '}
         {queued > 0 && (
@@ -345,8 +345,8 @@ function StepCard({ task }: { task: Task }) {
 
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-2.5">
-      <span className="px-1 text-[13px] font-extrabold text-grey">{label}</span>
+    <div className="flex flex-col gap-3">
+      <span className="text-[13px] font-extrabold text-grey">{label}</span>
       {children}
     </div>
   )

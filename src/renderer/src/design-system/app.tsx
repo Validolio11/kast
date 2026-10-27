@@ -279,7 +279,7 @@ export function ListTitle({
     </>
   )
   return (
-    <h2 className="mt-4 mb-1 ml-2 flex items-center gap-2.5 text-[22px] font-extrabold tracking-[-0.02em]">
+    <h2 className="mt-4 mb-1 ml-3.5 flex items-center gap-2.5 text-[22px] font-extrabold tracking-[-0.02em]">
       {collapsible ? (
         <button onClick={onToggle} aria-expanded={open} className="flex items-center gap-2.5 rounded-full">
           {inner}

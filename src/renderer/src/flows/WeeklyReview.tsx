@@ -15,7 +15,7 @@ export function WeeklyReview({ tasks, onDone }: { tasks: Task[]; onDone: () => v
     Object.fromEntries(tasks.map((t) => [t.id, 'someday' as ReviewChoice])),
   )
   return (
-    <section className="flex flex-col gap-2 rounded-tile bg-tile p-5 pt-7">
+    <section className="flex flex-col gap-2 rounded-tile bg-tile p-4 pt-7">
       <div className="flex items-start justify-between gap-4 px-3 pb-2">
         <div>
           <h2 className="text-[30px] leading-[1.05] font-extrabold tracking-[-0.03em]">Ще актуально?</h2>
