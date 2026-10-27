@@ -27,7 +27,8 @@ let quitting = false
 // Налагодження: KAST_CDP=9333 відкриває порт DevTools (знімки вікна, автотести)
 if (process.env.KAST_CDP) app.commandLine.appendSwitch('remote-debugging-port', process.env.KAST_CDP)
 if (!app.requestSingleInstanceLock()) app.quit()
-app.setAppUserModelId('com.kast.app')
+// У розробці запускається electron.exe: окремий ID, щоб Windows не закешувала його значок для встановленого Kast
+app.setAppUserModelId(app.isPackaged ? 'com.kast.app' : 'com.kast.app.dev')
 
 function pageUrl(page: 'index' | 'capture') {
   return DEV_URL ? `${DEV_URL}/${page}.html` : `app://kast/${page}.html`
