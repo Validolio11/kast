@@ -39,7 +39,9 @@ export const RichNote = forwardRef<RichNoteHandle, {
   placeholder: string
   onChange: (html: string, text: string) => void
   onLineToTask: (title: string) => Promise<void>
-}>(function RichNote({ html, placeholder, onChange, onLineToTask }, ref) {
+  /** Редагування заблоковане: лише читати, виділяти й копіювати */
+  readOnly?: boolean
+}>(function RichNote({ html, placeholder, onChange, onLineToTask, readOnly }, ref) {
   const editor = useRef<HTMLDivElement>(null)
   const lastHtml = useRef<string | null>(null)
   const [empty, setEmpty] = useState(false)
@@ -142,6 +144,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
       openMenu(rect?.left ?? 0, rect?.bottom ?? 0, null)
       return
     }
+    if (readOnly) return
     // Браузерні Ctrl+B/I/U вставляють <b>/<i>/<u>, які Kast не зберігає. Жирний — нашим стилем, решта вимкнена.
     if (e.ctrlKey && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
       e.preventDefault()
@@ -180,6 +183,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
 
   // Перетягнутий текст — теж лише текстом
   const onDrop = (e: React.DragEvent) => {
+    if (readOnly) return e.preventDefault()
     const text = e.dataTransfer.getData('text/plain')
     if (!text) return
     e.preventDefault()
@@ -233,9 +237,16 @@ export const RichNote = forwardRef<RichNoteHandle, {
     emit()
   }
 
-  const items: MenuAction[] = menu?.chip
+  const copyItem: MenuAction = menu?.chip
+    ? { label: 'Копіювати', icon: 'copy', onSelect: () => (copy(chipText(menu.chip!)), close()) }
+    : { label: 'Копіювати', icon: 'copy', disabled: !hasText, onSelect: () => (copy(menu!.range!.toString()), close()) }
+
+  // Заблокована нотатка: з меню лишається тільки копіювання
+  const items: MenuAction[] = readOnly
+    ? [copyItem]
+    : menu?.chip
     ? [
-        { label: 'Копіювати', icon: 'copy', onSelect: () => (copy(chipText(menu.chip!)), close()) },
+        copyItem,
         {
           label: 'Звичайний текст',
           icon: 'removeFormat',
@@ -272,12 +283,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
             done(on ? 'Нумерацію додано' : 'Нумерацію прибрано', before)
           },
         },
-        {
-          label: 'Копіювати',
-          icon: 'copy',
-          disabled: !hasText,
-          onSelect: () => (copy(menu!.range!.toString()), close()),
-        },
+        copyItem,
         {
           label: 'Вставити',
           icon: 'clipboardPaste',
@@ -339,14 +345,15 @@ export const RichNote = forwardRef<RichNoteHandle, {
     <>
       <div
         ref={editor}
-        contentEditable
+        contentEditable={!readOnly}
         suppressContentEditableWarning
         spellCheck
         role="textbox"
         aria-multiline
         aria-label="Текст нотатки"
+        aria-readonly={readOnly || undefined}
         data-placeholder={placeholder}
-        data-empty={empty || undefined}
+        data-empty={(empty && !readOnly) || undefined}
         onInput={emit}
         onKeyDown={onKeyDown}
         onPaste={onPaste}
@@ -363,7 +370,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
           label={menu.chip ? 'Дії з кнопкою копіювання' : 'Дії з виділеним'}
           items={items}
           onClose={close}
-          header={hasText && !menu.chip ? <FormatBar range={menu.range!} onStyle={restyle} /> : undefined}
+          header={hasText && !menu.chip && !readOnly ? <FormatBar range={menu.range!} onStyle={restyle} /> : undefined}
         />
       )}
     </>

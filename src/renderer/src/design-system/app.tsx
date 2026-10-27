@@ -163,12 +163,15 @@ export function PageGrid({ side, main, fill }: { side: ReactNode; main: ReactNod
     <div
       className={cn(
         'grid min-w-0 grid-cols-[400px_minmax(0,1fr)] items-start gap-6 max-[1039px]:grid-cols-1',
-        fill && 'min-h-0 flex-1 items-stretch',
+        fill && 'items-stretch',
       )}
     >
-      <div className={cn('enter-stagger flex min-w-0 flex-col gap-3 [--enter-base:80ms]', fill && 'min-h-0')}>{side}</div>
+      {/* fill: ліва колонка не розтягує рядок (h-0), а займає рівно висоту основної */}
+      <div className={cn('enter-stagger flex min-w-0 flex-col gap-3 [--enter-base:80ms]', fill && 'min-[1040px]:h-0 min-[1040px]:min-h-full')}>
+        {side}
+      </div>
       {/* Перший список у колонці починається без верхнього відступу — рівно з полем ліворуч */}
-      <div className={cn('enter-stagger flex min-w-0 flex-col gap-3 [--enter-base:160ms] [&>section:first-child>h2]:mt-0', fill && 'min-h-0')}>
+      <div className={cn('enter-stagger flex min-w-0 flex-col gap-3 [--enter-base:160ms] [&>section:first-child>h2]:mt-0')}>
         {main}
       </div>
     </div>

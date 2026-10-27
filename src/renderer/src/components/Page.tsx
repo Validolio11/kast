@@ -30,20 +30,13 @@ export function Page({
   actions?: ReactNode
   side: ReactNode
   main: ReactNode
-  /** Основна колонка займає всю висоту вікна (Блокнот); на вузькому вікні — звичайна прокрутка */
+  /** Висоту задає основна колонка (аркуш Блокнота), а ліва прокручується всередині цієї висоти */
   fill?: boolean
 }) {
   const entering = useEntering()
   return (
-    <div
-      data-entering={entering}
-      className={cn('h-full overflow-y-auto', fill && 'min-[1040px]:flex min-[1040px]:flex-col min-[1040px]:overflow-hidden')}>
-      <div
-        className={cn(
-          'mx-auto flex w-full max-w-[1280px] flex-col px-8 pt-6 pb-16 max-[640px]:px-4',
-          fill && 'min-[1040px]:min-h-0 min-[1040px]:flex-1 min-[1040px]:pb-6',
-        )}
-      >
+    <div data-entering={entering} className="h-full overflow-y-auto">
+      <div className={cn('mx-auto flex w-full max-w-[1280px] flex-col px-8 pt-6 pb-16 max-[640px]:px-4', fill && 'pb-8')}>
         <PageHead light={light} heavy={heavy} sub={sub} actions={actions} />
         <PageGrid side={side} main={main} fill={fill} />
       </div>

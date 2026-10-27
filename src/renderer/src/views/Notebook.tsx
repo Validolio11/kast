@@ -217,11 +217,19 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
   }, [page])
 
   const html = pages[page] ?? pages[0]
+  const locked = !!note.locked
+  const toggleLock = () => {
+    flush()
+    updateNote(note.id, { locked: locked ? undefined : 1 })
+    toast({ title: locked ? 'Редагування увімкнено' : 'Редагування заблоковано', text: locked ? undefined : 'Текст можна читати й копіювати' })
+  }
 
   return (
-    <section className="flex min-h-[520px] flex-col rounded-panel bg-paper p-10 pb-6 text-ink max-[640px]:p-6 min-[1040px]:min-h-0 min-[1040px]:flex-1">
+    // Фіксований розмір за будь-якої ширини вікна; довгий текст прокручується всередині
+    <section className="flex h-[720px] flex-col rounded-panel bg-paper p-10 pb-6 text-ink max-[640px]:p-6">
       <div className="flex items-center gap-3">
         {!!note.pinned && <PulseChip tone="growth">Закріплено</PulseChip>}
+        {locked && <PulseChip tone="canvas">Лише читання</PulseChip>}
         <span className="text-[14px] font-bold text-dim">
           Змінено {age(note.updatedAt)}, {fmtTime(note.updatedAt)}
         </span>
@@ -229,6 +237,7 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
       <input
         ref={titleRef}
         value={title}
+        readOnly={locked}
         onChange={(e) => {
           const t = e.target.value.replace(/\n/g, ' ')
           setTitle(t)
@@ -252,6 +261,7 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
           html={html}
           placeholder={'Думки, плани, протокол зустрічі…\n[] Рядок із дужками + Enter стане задачею\nПравий клік по виділеному — шрифт, нумерація, кнопка копіювання'}
           onChange={onText}
+          readOnly={locked}
           onLineToTask={async (t) => {
             await captureToInbox(t, { sourceNoteId: note.id })
           }}
@@ -259,9 +269,15 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
       </div>
       {/* Підвал як у Karkas: дія ліворуч, сторінки по центру, закріпити й видалити праворуч; тісно — переноситься */}
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-paper-line pt-4">
-        <Button variant="canvas" size="md" iconLeft="arrowUpRight" onClick={() => editorRef.current?.convertCurrent()} data-tip="Ctrl + Enter">
-          Рядок у задачі
-        </Button>
+        {locked ? (
+          <Button variant="canvas" size="md" iconLeft="pencil" onClick={toggleLock}>
+            Редагувати
+          </Button>
+        ) : (
+          <Button variant="canvas" size="md" iconLeft="arrowUpRight" onClick={() => editorRef.current?.convertCurrent()} data-tip="Ctrl + Enter">
+            Рядок у задачі
+          </Button>
+        )}
         <div className="flex flex-1 justify-center">
           <div
             role="tablist"
@@ -284,7 +300,7 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
                 onClick={() => openPage(i)}
                 onContextMenu={(e) => {
                   e.preventDefault()
-                  if (pages.length > 1) setPageMenu({ x: e.clientX, y: e.clientY, index: i })
+                  if (pages.length > 1 && !locked) setPageMenu({ x: e.clientX, y: e.clientY, index: i })
                 }}
                 className={cn(
                   'size-9 rounded-full text-[14px] font-extrabold tabular-nums transition-[background-color,color,transform] duration-200 active:scale-[0.88]',
@@ -294,16 +310,19 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
                 {i + 1}
               </button>
             ))}
-            <button
-              onClick={addPage}
-              aria-label="Нова сторінка"
-              data-tip="Нова сторінка"
-              className="grid size-9 place-items-center rounded-full text-paper-muted transition-[color,transform] hover:text-ink active:scale-[0.88]"
-            >
-              <Icon name="plus" size={15} strokeWidth={2.6} />
-            </button>
+            {!locked && (
+              <button
+                onClick={addPage}
+                aria-label="Нова сторінка"
+                data-tip="Нова сторінка"
+                className="grid size-9 place-items-center rounded-full text-paper-muted transition-[color,transform] hover:text-ink active:scale-[0.88]"
+              >
+                <Icon name="plus" size={15} strokeWidth={2.6} />
+              </button>
+            )}
           </div>
         </div>
+        {!locked && <RoundButton icon="lock" tone="paper-line" label="Заблокувати редагування" onClick={toggleLock} />}
         <RoundButton
           icon="pin"
           tone="paper-line"
@@ -315,6 +334,7 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
           tone="paper-line"
           label="Видалити нотатку"
           onClick={async () => {
+            if (locked) return toast({ kind: 'info', title: 'Нотатку заблоковано', text: 'Натисніть «Редагувати», щоб її видалити' })
             flush()
             await removeNote(note.id)
             onDeleted()
