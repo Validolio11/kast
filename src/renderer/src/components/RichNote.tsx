@@ -4,7 +4,7 @@ import { cn, ContextMenu, Icon, useToast, type MenuAction } from '@/design-syste
 import { SENT_MARK, TASK_LINE } from '@/data/notes'
 import { db, type FileRec } from '@/data/db'
 import { addImages, downloadImage } from '@/data/files'
-import { Viewer } from './Attachments'
+import { VideoViewer, Viewer } from './Attachments'
 import {
   alignBlocks,
   alignOf,
@@ -18,12 +18,15 @@ import {
   makeChip,
   makeImage,
   makeLinkChip,
+  makeVideo,
+  parseVideo,
   plainText,
   sanitize,
   serialize,
   styleAt,
   toggleNumbering,
   URL_RE,
+  videoCover,
   WEIGHTS,
   type Align,
   type ImgSize,
@@ -66,6 +69,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
   const [empty, setEmpty] = useState(false)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [viewer, setViewer] = useState<{ files: FileRec[]; index: number } | null>(null)
+  const [video, setVideo] = useState<string | null>(null)
   const toast = useToast()
 
   const el = () => editor.current!
@@ -75,7 +79,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
   const hydrate = useCallback(async () => {
     const e = editor.current
     if (!e) return
-    for (const img of Array.from(e.querySelectorAll<HTMLImageElement>('.note-img img:not([src])'))) {
+    for (const img of Array.from(e.querySelectorAll<HTMLImageElement>('.note-img[data-file] img:not([src])'))) {
       const id = (img.parentElement as HTMLElement).dataset.file!
       const file = await db.files.get(id)
       if (file && !file.deleted) img.src = file.data
@@ -155,9 +159,27 @@ export const RichNote = forwardRef<RichNoteHandle, {
     emit()
   }
 
+  /** Відео грає прямо в тексті; кнопка в куті розгортає великий плеєр */
+  const playInline = (box: HTMLElement) => {
+    const info = parseVideo(box.dataset.url ?? '')
+    const frame = box.querySelector('.note-video-frame')
+    if (!info || !frame) return
+    const player = info.file
+      ? `<video src="${encodeURI(box.dataset.url!)}" controls autoplay playsinline></video>`
+      : `<iframe src="${info.embed(location.hostname || 'localhost')}" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`
+    frame.innerHTML = `${player}<button type="button" class="note-video-expand" aria-label="Розгорнути плеєр" title="Розгорнути"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></button>`
+    box.classList.add('is-playing')
+  }
+  /** Великий плеєр поверх усього; вбудований у тексті зупиняємо, щоб не грали двоє */
+  const expandVideo = (box: HTMLElement) => {
+    box.classList.remove('is-playing')
+    videoCover(box)
+    setVideo(box.dataset.url ?? null)
+  }
+
   /** Перегляд усіх фото нотатки в порядку тексту, починаючи з клікнутого */
   const openViewer = async (box: HTMLElement) => {
-    const boxes = Array.from(el().querySelectorAll<HTMLElement>('.note-img'))
+    const boxes = Array.from(el().querySelectorAll<HTMLElement>('.note-img[data-file]'))
     const files = (await Promise.all(boxes.map((b) => db.files.get(b.dataset.file!)))).filter((f): f is FileRec => !!f && !f.deleted)
     const index = Math.max(0, files.findIndex((f) => f.id === box.dataset.file))
     if (files.length) setViewer({ files, index })
@@ -239,9 +261,9 @@ export const RichNote = forwardRef<RichNoteHandle, {
     r.setStart(node, sel.anchorOffset - m[1].length)
     r.setEnd(node, sel.anchorOffset)
     r.deleteContents()
-    const chip = makeLinkChip(m[1])
+    const chip = parseVideo(m[1]) ? makeVideo(m[1]) : makeLinkChip(m[1])
     r.insertNode(chip)
-    const tail = document.createTextNode(addSpace ? ' ' : '')
+    const tail = document.createTextNode(addSpace ? '\u00a0' : '')
     chip.after(tail)
     const c = document.createRange()
     c.setStart(tail, tail.length)
@@ -308,9 +330,9 @@ export const RichNote = forwardRef<RichNoteHandle, {
       if (!sel?.rangeCount) return
       const range = sel.getRangeAt(0)
       range.deleteContents()
-      const chip = makeLinkChip(text.trim())
+      const chip = parseVideo(text.trim()) ? makeVideo(text.trim()) : makeLinkChip(text.trim())
       range.insertNode(chip)
-      const tail = document.createTextNode(' ')
+      const tail = document.createTextNode('\u00a0')
       chip.after(tail)
       const c = document.createRange()
       c.setStart(tail, 1)
@@ -341,7 +363,15 @@ export const RichNote = forwardRef<RichNoteHandle, {
   // Кнопка копіювання в чипі
   const onClick = async (e: React.MouseEvent) => {
     // Клік по фото — перегляд у повному розмірі
-    const box = (e.target as HTMLElement).closest('.note-img') as HTMLElement | null
+    const target = e.target as HTMLElement
+    const vid = target.closest('.note-video') as HTMLElement | null
+    if (vid) {
+      e.preventDefault()
+      if (target.closest('.note-video-expand')) return expandVideo(vid)
+      if (!vid.classList.contains('is-playing')) playInline(vid)
+      return
+    }
+    const box = target.closest('.note-img') as HTMLElement | null
     if (box) return void openViewer(box)
     // Посилання відкривається в браузері кліком по чипу
     const link = (e.target as HTMLElement).closest('.note-link') as HTMLElement | null
@@ -443,7 +473,32 @@ export const RichNote = forwardRef<RichNoteHandle, {
         ...(readOnly ? [] : [{ label: 'Прибрати з нотатки', icon: 'trashLines', tone: 'danger', onSelect: () => (close(), removeImageBox(imgBox)) } as MenuAction]),
       ]
     : []
-  const items: MenuAction[] = imgBox
+  const isVideo = !!imgBox?.classList.contains('note-video')
+  const videoItems: MenuAction[] = isVideo
+    ? [
+        { label: 'Розгорнути плеєр', icon: 'play', onSelect: () => (close(), expandVideo(imgBox!)) },
+        { label: 'Відкрити в браузері', icon: 'arrowUpRight', onSelect: () => (close(), window.open(imgBox!.dataset.url, '_blank')) },
+        { label: 'Копіювати посилання', icon: 'copy', onSelect: () => (copy(imgBox!.dataset.url ?? ''), close()) },
+        ...(readOnly
+          ? []
+          : [
+              {
+                label: 'Показати як посилання',
+                icon: 'link',
+                onSelect: () => {
+                  const before = snapshot()
+                  imgBox!.replaceWith(makeLinkChip(imgBox!.dataset.url ?? ''))
+                  close()
+                  done('Відео стало посиланням', before)
+                },
+              } as MenuAction,
+              { label: 'Прибрати з нотатки', icon: 'trashLines', tone: 'danger', onSelect: () => (close(), removeImageBox(imgBox!)) } as MenuAction,
+            ]),
+      ]
+    : []
+  const items: MenuAction[] = isVideo
+    ? videoItems
+    : imgBox
     ? imageItems
     : readOnly
     ? isLink
@@ -452,6 +507,20 @@ export const RichNote = forwardRef<RichNoteHandle, {
     : menu?.chip
     ? [
         ...(isLink ? [openItem] : []),
+        ...(isLink && parseVideo(chipText(menu!.chip!))
+          ? [
+              {
+                label: 'Показати як відео',
+                icon: 'play',
+                onSelect: () => {
+                  const before = snapshot()
+                  menu!.chip!.replaceWith(makeVideo(chipText(menu!.chip!)))
+                  close()
+                  done('Посилання стало відео', before)
+                },
+              } as MenuAction,
+            ]
+          : []),
         copyItem,
         {
           label: 'Звичайний текст',
@@ -521,7 +590,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
             range.deleteContents()
             const chip = makeChip(text)
             range.insertNode(chip)
-            const space = document.createTextNode(' ')
+            const space = document.createTextNode('\u00a0')
             chip.after(space)
             const r = document.createRange()
             r.setStartAfter(space)
@@ -589,7 +658,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
         <ContextMenu
           x={menu.x}
           y={menu.y}
-          label={imgBox ? 'Дії з фото' : menu.chip ? (isLink ? 'Дії з посиланням' : 'Дії з кнопкою копіювання') : 'Дії з виділеним'}
+          label={isVideo ? 'Дії з відео' : imgBox ? 'Дії з фото' : menu.chip ? (isLink ? 'Дії з посиланням' : 'Дії з кнопкою копіювання') : 'Дії з виділеним'}
           items={items}
           onClose={close}
           header={
@@ -602,6 +671,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
           }
         />
       )}
+      {video && <VideoViewer url={video} onClose={() => setVideo(null)} />}
       {viewer && (
         <Viewer
           images={viewer.files}

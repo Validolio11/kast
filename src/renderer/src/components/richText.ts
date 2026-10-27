@@ -76,11 +76,99 @@ export function makeImage(id: string, size: ImgSize = 'm', wrap: ImgWrap = 'left
   return box
 }
 
-/** HTML для збереження: без вбудованих зображень (лише посилання на файли) */
+/** HTML для збереження: без вбудованих зображень і плеєрів (лише посилання на файли й відео) */
 export function serialize(editor: HTMLElement) {
   const copy = editor.cloneNode(true) as HTMLElement
+  copy.querySelectorAll('.note-video').forEach((v) => (v.innerHTML = ''))
   copy.querySelectorAll('.note-img img').forEach((img) => img.removeAttribute('src'))
   return copy.innerHTML
+}
+
+/* ───────── Відео за посиланням ───────── */
+
+export interface VideoInfo {
+  label: string
+  /** Адреса вбудованого плеєра; host — домен сторінки (його вимагає Twitch) */
+  embed: (host: string) => string
+  thumb?: string
+  /** Пряме посилання на файл — грає звичайний <video> */
+  file?: boolean
+}
+
+/** YouTube (зокрема Shorts і live), Vimeo, Twitch (канал, запис, кліп) і прямі .mp4/.webm/.mov */
+export function parseVideo(raw: string): VideoInfo | null {
+  let u: URL
+  try {
+    u = new URL(raw)
+  } catch {
+    return null
+  }
+  const host = u.hostname.replace(/^(www\.|m\.)/, '')
+  const path = u.pathname.split('/').filter(Boolean)
+  const yt = (id: string | null | undefined): VideoInfo | null =>
+    id && /^[\w-]{11}$/.test(id)
+      ? {
+          label: 'YouTube',
+          thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+          embed: () => `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`,
+        }
+      : null
+  if (host === 'youtu.be') return yt(path[0])
+  if (host === 'youtube.com' || host === 'music.youtube.com') {
+    if (path[0] === 'watch') return yt(u.searchParams.get('v'))
+    if (['shorts', 'embed', 'live', 'v'].includes(path[0])) return yt(path[1])
+    return null
+  }
+  if (host === 'vimeo.com' && /^\d+$/.test(path[0] ?? '')) {
+    const id = path[0]
+    return { label: 'Vimeo', embed: () => `https://player.vimeo.com/video/${id}?autoplay=1` }
+  }
+  if (host === 'clips.twitch.tv' && path[0]) {
+    const clip = path[0]
+    return { label: 'Twitch', embed: (h) => `https://clips.twitch.tv/embed?clip=${clip}&parent=${h}&autoplay=true` }
+  }
+  if (host === 'twitch.tv' && path[0]) {
+    if (path[0] === 'videos' && /^\d+$/.test(path[1] ?? '')) {
+      const id = path[1]
+      return { label: 'Twitch', embed: (h) => `https://player.twitch.tv/?video=${id}&parent=${h}&autoplay=true` }
+    }
+    if (path[1] === 'clip' && path[2]) {
+      const clip = path[2]
+      return { label: 'Twitch', embed: (h) => `https://clips.twitch.tv/embed?clip=${clip}&parent=${h}&autoplay=true` }
+    }
+    if (path.length === 1 && /^\w+$/.test(path[0])) {
+      const channel = path[0]
+      return { label: 'Twitch', embed: (h) => `https://player.twitch.tv/?channel=${channel}&parent=${h}&autoplay=true` }
+    }
+    return null
+  }
+  if (/^https:$/.test(u.protocol) && /\.(mp4|webm|mov|m4v)$/i.test(u.pathname)) return { label: 'Відео', file: true, embed: () => raw }
+  return null
+}
+
+const PLAY_ICON =
+  '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z"/></svg>'
+
+/** Обкладинка відео: картинка (якщо є), назва сервісу й кругла кнопка ▶ */
+export function videoCover(box: HTMLElement) {
+  const info = parseVideo(box.dataset.url ?? '')
+  if (!info) return
+  box.innerHTML = `<span class="note-video-frame">${info.thumb ? `<img src="${info.thumb}" alt="" draggable="false">` : ''}<span class="note-video-badge">${esc(info.label)}</span><span class="note-video-play">${PLAY_ICON}</span></span>`
+}
+
+/**
+ * Відео в тексті виглядає як фото: ті самі розміри, обтікання й вирівнювання,
+ * але з обкладинкою і кнопкою ▶. Зберігаємо лише посилання.
+ */
+export function makeVideo(url: string, size: ImgSize = 'm', wrap: ImgWrap = 'left') {
+  const box = document.createElement('span')
+  box.className = 'note-img note-video'
+  box.contentEditable = 'false'
+  box.dataset.url = url
+  box.dataset.size = size
+  box.dataset.wrap = wrap
+  videoCover(box)
+  return box
 }
 
 /** Чип «кнопка копіювання»: текст + кругла кнопка копіювання */
@@ -112,6 +200,12 @@ export function sanitize(html: string) {
       if (n.nodeType !== Node.ELEMENT_NODE) return
       const el = n as HTMLElement
       if (el.tagName === 'BR') return void to.appendChild(document.createElement('br'))
+      if (el.classList.contains('note-video')) {
+        const { url = '', size = 'm', wrap = 'left' } = el.dataset
+        if (parseVideo(url))
+          to.appendChild(makeVideo(url, SIZES.includes(size as ImgSize) ? (size as ImgSize) : 'm', WRAPS.includes(wrap as ImgWrap) ? (wrap as ImgWrap) : 'left'))
+        return
+      }
       if (el.classList.contains('note-img')) {
         const { file = '', size = 'm', wrap = 'left' } = el.dataset
         if (FILE_ID.test(file))
@@ -241,7 +335,7 @@ export function plainText(editor: HTMLElement) {
     if (node.nodeType === Node.TEXT_NODE) return (node.textContent ?? '').replace(/\u00a0/g, ' ')
     if (node.nodeType !== Node.ELEMENT_NODE) return ''
     const el = node as HTMLElement
-    if (el.classList.contains('note-chip')) return chipText(el)
+    if (el.classList.contains('note-chip') || el.classList.contains('note-video')) return chipText(el)
     if (el.tagName === 'BR') return ''
     return Array.from(el.childNodes).map(textOf).join('')
   }

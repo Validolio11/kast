@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, screen, shell, Tray } from 'electron'
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, net, Notification, protocol, screen, session, shell, Tray } from 'electron'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join, normalize } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -264,6 +264,11 @@ app.on('window-all-closed', () => {
 })
 
 app.whenReady().then(() => {
+  // Вбудований плеєр YouTube відмовляє без Referer (помилка 153), а сторінки app:// його не надсилають
+  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['https://www.youtube-nocookie.com/*'] }, (details, done) => {
+    if (!details.requestHeaders.Referer) details.requestHeaders.Referer = 'https://kast.app/'
+    done({ requestHeaders: details.requestHeaders })
+  })
   protocol.handle('app', (req) => {
     const { pathname } = new URL(req.url)
     const file = normalize(join(RENDERER_DIR, decodeURIComponent(pathname)))

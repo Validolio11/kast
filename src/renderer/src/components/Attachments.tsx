@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Button, RoundButton } from '@/design-system'
 import type { FileRec } from '@/data/db'
+import { parseVideo } from './richText'
 import { downloadImage } from '@/data/files'
 
 /** Перегляд фото на весь екран: у натуральному розмірі (не більше вікна), стрілки — сусідні фото */
@@ -133,5 +134,54 @@ export function DropHint({ show }: { show: boolean }) {
         Відпустіть, щоб додати фото
       </span>
     </div>
+  )
+}
+
+/** Розгорнутий плеєр відео: великий, по центру вікна; Esc або клік повз — закрити */
+export function VideoViewer({ url, onClose }: { url: string; onClose: () => void }) {
+  const info = parseVideo(url)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  })
+  if (!info) return null
+  return createPortal(
+    <div
+      role="dialog"
+      aria-label="Плеєр відео"
+      className="no-drag fixed inset-0 z-[90] flex animate-fade-in flex-col items-center justify-center gap-5 bg-canvas/90 p-8 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="aspect-video w-[min(100%,calc((100vh-160px)*16/9),1600px)] animate-modal-in overflow-hidden rounded-[28px] bg-canvas shadow-[0_24px_60px_-12px_rgba(0,0,0,0.9)]"
+      >
+        {info.file ? (
+          <video src={url} controls autoPlay playsInline className="size-full" />
+        ) : (
+          <iframe
+            src={info.embed(location.hostname || 'localhost')}
+            title={info.label}
+            allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+            className="size-full border-0"
+          />
+        )}
+      </div>
+      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <Button size="md" variant="steel" iconLeft="arrowUpRight" onClick={() => window.open(url, '_blank')}>
+          Відкрити в {info.label === 'Відео' ? 'браузері' : info.label}
+        </Button>
+        <RoundButton icon="x" label="Закрити · Esc" onClick={onClose} />
+      </div>
+    </div>,
+    document.body,
   )
 }
