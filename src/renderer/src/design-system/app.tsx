@@ -332,6 +332,7 @@ export function PulseRow({
   selected,
   muted,
   age,
+  finishing,
 }: {
   leading?: ReactNode
   title: ReactNode
@@ -344,11 +345,14 @@ export function PulseRow({
   muted?: boolean
   /** Старіння: маленька шкала перед мета-даними (value 0…1) і підказка з кількістю днів */
   age?: { value: number; tip: string }
+  /** Задачу щойно виконано: спливає «+1 зроблено», рядок від'їжджає й тьмяніє, потім іде у «Зроблено» */
+  finishing?: boolean
 }) {
   return (
     <div
       className={cn(
         'group row-enter relative flex min-h-[60px] items-center gap-3.5 rounded-[30px] pr-4 pl-3.5 transition-colors duration-150',
+        finishing && 'animate-row-away',
         selected ? 'bg-steel' : 'shadow-[inset_0_0_0_1px_var(--color-tile)] hover:bg-tile',
         onClick && 'cursor-pointer',
       )}
@@ -379,10 +383,18 @@ export function PulseRow({
         </div>
       )}
       {(meta || age) && (
-        <div className="flex shrink-0 items-center gap-2 text-[13px] font-semibold text-muted" onClick={(e) => e.stopPropagation()}>
+        <div
+          className={cn('flex shrink-0 items-center gap-2 text-[13px] font-semibold text-muted transition-opacity duration-200', finishing && 'opacity-0')}
+          onClick={(e) => e.stopPropagation()}
+        >
           {age && <AgeScale {...age} />}
           {meta}
         </div>
+      )}
+      {finishing && (
+        <span className="pointer-events-none absolute top-1/2 right-5 -mt-[13px] h-[26px] animate-plus-up rounded-[13px] bg-growth px-2.5 text-[13px] leading-[26px] font-extrabold text-ink">
+          +1 зроблено
+        </span>
       )}
     </div>
   )
@@ -411,21 +423,40 @@ function AgeScale({ value, tip }: { value: number; tip: string }) {
 }
 
 /** Кругла галочка 32px: порожня — обвідка steel, виконано — paper */
+const SPARKS = [0, 45, 90, 135, 180, 225, 270, 315]
+
+/** Кругла галочка 32px. Коли її ставлять кліком — пружинить, лінія малюється, розлітаються 8 зелених іскор. */
 export function CheckCircle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  const [burst, setBurst] = useState(0)
   return (
     <button
       role="checkbox"
       aria-checked={checked}
       aria-label={label}
-      onClick={() => onChange(!checked)}
+      onClick={() => {
+        if (!checked) setBurst((b) => b + 1)
+        onChange(!checked)
+      }}
       className={cn(
-        'grid size-8 place-items-center rounded-full transition-[background-color,box-shadow,color] duration-200 active:scale-90',
+        'relative grid size-8 place-items-center rounded-full transition-[background-color,box-shadow,color] duration-200 active:scale-90',
         checked
-          ? 'animate-check-pop bg-paper text-ink'
+          ? cn('bg-paper text-ink', burst > 0 && 'animate-check-pop')
           : 'text-transparent shadow-[inset_0_0_0_2px_var(--color-steel)] hover:text-muted hover:shadow-[inset_0_0_0_2px_var(--color-paper)]',
       )}
     >
-      <Icon name="check" size={16} strokeWidth={3} />
+      <svg key={checked ? burst : 'off'} width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M20 6 9 17l-5-5" pathLength={1} className={cn(checked && burst > 0 && 'animate-check-draw [stroke-dasharray:1]')} />
+      </svg>
+      {checked &&
+        burst > 0 &&
+        SPARKS.map((a) => (
+          <span
+            key={`${burst}-${a}`}
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-1/2 -m-[2.5px] size-[5px] animate-spark rounded-full bg-growth"
+            style={{ '--a': `${a}deg` } as CSSProperties}
+          />
+        ))}
     </button>
   )
 }

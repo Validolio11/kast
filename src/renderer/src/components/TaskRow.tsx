@@ -1,8 +1,11 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CheckCircle, CycleChip, PulseRow, useToast, type ChipOption } from '@/design-system'
 import type { Task, When } from '@/data/db'
 import { complete, STALE_DAYS, update } from '@/data/tasks'
 import { DAY, now, pluralWord } from '@/lib/time'
+
+/** Скільки триває анімація виконання до переходу задачі у «Зроблено» */
+const FINISH_MS = 1150
 
 export const WHEN_OPTIONS: ChipOption<When>[] = [
   { value: 'any', label: 'Коли?', icon: 'clock' },
@@ -28,17 +31,46 @@ export function TaskRow({
 }) {
   const done = task.status === 'done'
   const toast = useToast()
+  // Виконання: спершу анімація (іскри, «+1», відліт), і лише потім задача переходить у «Зроблено»
+  const [finishing, setFinishing] = useState(false)
+  const pending = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(
+    () => () => {
+      // Пішли з вкладки посеред анімації — виконання все одно зберігаємо
+      if (pending.current) {
+        clearTimeout(pending.current)
+        complete(task.id, true)
+      }
+    },
+    [task.id],
+  )
   const toggle = async (v: boolean) => {
+    if (v && !done && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setFinishing(true)
+      pending.current = setTimeout(() => {
+        pending.current = undefined
+        complete(task.id, true)
+      }, FINISH_MS)
+      return
+    }
+    if (!v && pending.current) {
+      // Передумали під час анімації
+      clearTimeout(pending.current)
+      pending.current = undefined
+      setFinishing(false)
+      return
+    }
     const p = await complete(task.id, v)
     if (p === 'inbox') toast({ kind: 'info', title: 'День уже повний — задачу повернуто у Вхідні' })
     else if (p) toast({ title: 'Повернуто на сьогодні' })
   }
   return (
     <PulseRow
-      leading={<CheckCircle checked={done} onChange={toggle} label={`Виконано: ${task.title}`} />}
+      leading={<CheckCircle checked={done || finishing} onChange={toggle} label={`Виконано: ${task.title}`} />}
       title={task.title}
       sub={task.firstStep && !done ? `Перший крок: ${task.firstStep}` : undefined}
       done={done}
+      finishing={finishing}
       muted={muted}
       onClick={() => onOpen(task.id)}
       actions={actions}
