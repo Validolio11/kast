@@ -6,6 +6,23 @@ import type { FileRec } from '@/data/db'
 import { parseVideo } from './richText'
 import { downloadImage } from '@/data/files'
 
+function useViewerBack(onClose: () => void) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const back = (e: Event) => {
+      if (e.defaultPrevented || document.querySelector('[role="menu"]')) return
+      const dialogs = document.querySelectorAll('[data-dialog-open]')
+      if (dialogs[dialogs.length - 1] !== ref.current) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      onClose()
+    }
+    document.addEventListener('kast:back', back, true)
+    return () => document.removeEventListener('kast:back', back, true)
+  }, [onClose])
+  return ref
+}
+
 /** Перегляд фото на весь екран: у натуральному розмірі (не більше вікна), стрілки — сусідні фото */
 export function Viewer({
   images,
@@ -22,6 +39,8 @@ export function Viewer({
   onRemove?: (f: FileRec) => void
 }) {
   const file = images[index]
+  const viewerRef = useViewerBack(onClose)
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
   const many = images.length > 1
   const step = (d: number) => onIndex((index + d + images.length) % images.length)
 
@@ -42,19 +61,36 @@ export function Viewer({
 
   return createPortal(
     <div
+      ref={viewerRef}
       role="dialog"
+      aria-modal="true"
+      data-dialog-open=""
       aria-label="Перегляд фото"
-      className="no-drag fixed inset-0 z-[90] flex animate-fade-in flex-col items-center justify-center gap-5 bg-canvas/90 p-8 backdrop-blur-sm"
+      className="media-viewer no-drag fixed inset-0 z-[90] flex animate-fade-in flex-col items-center justify-center gap-5 bg-canvas/90 p-8 backdrop-blur-sm"
       onClick={onClose}
     >
       <img
         src={file.data}
         alt=""
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={(e) => {
+          const touch = e.touches.length === 1 ? e.touches[0] : null
+          touchStart.current = touch ? { x: touch.clientX, y: touch.clientY } : null
+        }}
+        onTouchCancel={() => { touchStart.current = null }}
+        onTouchEnd={(e) => {
+          const start = touchStart.current
+          touchStart.current = null
+          const touch = e.changedTouches[0]
+          if (!many || !start || !touch) return
+          const dx = touch.clientX - start.x
+          const dy = touch.clientY - start.y
+          if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) step(dx < 0 ? 1 : -1)
+        }}
         className="max-h-[calc(100vh-160px)] max-w-full animate-modal-in rounded-[28px] object-contain shadow-[0_24px_60px_-12px_rgba(0,0,0,0.9)]"
         style={{ width: file.w, aspectRatio: `${file.w} / ${file.h}` }}
       />
-      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <div className="media-viewer-controls flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
         {many && <RoundButton icon="chevronLeft" label="Попереднє · ←" onClick={() => step(-1)} />}
         <Button size="md" variant="pulse" iconLeft="download" onClick={() => downloadImage(file)}>
           Завантажити
@@ -140,6 +176,7 @@ export function DropHint({ show }: { show: boolean }) {
 /** Розгорнутий плеєр відео: великий, по центру вікна; Esc або клік повз — закрити */
 export function VideoViewer({ url, onClose }: { url: string; onClose: () => void }) {
   const info = parseVideo(url)
+  const viewerRef = useViewerBack(onClose)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
@@ -153,14 +190,17 @@ export function VideoViewer({ url, onClose }: { url: string; onClose: () => void
   if (!info) return null
   return createPortal(
     <div
+      ref={viewerRef}
       role="dialog"
+      aria-modal="true"
+      data-dialog-open=""
       aria-label="Плеєр відео"
-      className="no-drag fixed inset-0 z-[90] flex animate-fade-in flex-col items-center justify-center gap-5 bg-canvas/90 p-8 backdrop-blur-sm"
+      className="media-viewer no-drag fixed inset-0 z-[90] flex animate-fade-in flex-col items-center justify-center gap-5 bg-canvas/90 p-8 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="aspect-video w-[min(100%,calc((100vh-160px)*16/9),1600px)] animate-modal-in overflow-hidden rounded-[28px] bg-canvas shadow-[0_24px_60px_-12px_rgba(0,0,0,0.9)]"
+        className="media-viewer-video aspect-video w-[min(100%,calc((100vh-160px)*16/9),1600px)] animate-modal-in overflow-hidden rounded-[28px] bg-canvas shadow-[0_24px_60px_-12px_rgba(0,0,0,0.9)]"
       >
         {info.file ? (
           <video src={url} controls autoPlay playsInline className="size-full" />
@@ -175,7 +215,7 @@ export function VideoViewer({ url, onClose }: { url: string; onClose: () => void
           />
         )}
       </div>
-      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <div className="media-viewer-controls flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
         <Button size="md" variant="steel" iconLeft="arrowUpRight" onClick={() => window.open(url, '_blank')}>
           Відкрити в {info.label === 'Відео' ? 'браузері' : info.label}
         </Button>

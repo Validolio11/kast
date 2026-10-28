@@ -5,8 +5,9 @@ import { rolloverLeftovers, sweepStale } from '@/data/tasks'
 import { markLegacyQuickNote } from '@/data/notes'
 import { CloseDay } from '@/flows/CloseDay'
 import { Focus } from '@/flows/Focus'
-import { useDayKey, useHour, useSettings, useUpdateState } from '@/lib/hooks'
+import { installUpdate, useDayKey, useHour, useSettings, useUpdateState } from '@/lib/hooks'
 import { startSync, useSync } from '@/sync/engine'
+import { startAndroidUpdates } from '@/lib/androidUpdate'
 import { Done } from '@/views/Done'
 import { Inbox } from '@/views/Inbox'
 import { Notebook } from '@/views/Notebook'
@@ -41,6 +42,7 @@ function Shell() {
 
   useEffect(() => {
     startSync()
+    startAndroidUpdates()
   }, [])
 
   useEffect(() => {
@@ -67,8 +69,22 @@ function Shell() {
   const go = useCallback((t: Tab) => {
     setFocusId(null)
     setTab(t)
-    requestAnimationFrame(() => captureRef.current?.focus())
+    if (!matchMedia('(max-width: 767px)').matches) requestAnimationFrame(() => captureRef.current?.focus())
   }, [])
+
+  useEffect(() => {
+    const back = (e: Event) => {
+      if (e.defaultPrevented) return
+      if (settingsOpen) setSettingsOpen(false)
+      else if (closing) setClosing(false)
+      else if (focusId) setFocusId(null)
+      else if (tab !== 'today') go('today')
+      else return
+      e.preventDefault()
+    }
+    document.addEventListener('kast:back', back)
+    return () => document.removeEventListener('kast:back', back)
+  }, [settingsOpen, closing, focusId, tab, go])
 
   // Перехід з трею / сповіщення
   const updateRef = useRef(update)
@@ -88,7 +104,7 @@ function Shell() {
               title: `Версія ${u.version} готова`,
               text: 'Перезапуск займе кілька секунд',
               ms: 10_000,
-              action: { label: 'Перезапустити', onClick: () => window.kast.updates.install() },
+              action: { label: 'Перезапустити', onClick: installUpdate },
             })
         } else go(t)
       }),
@@ -117,23 +133,23 @@ function Shell() {
   }, [go])
 
   const tabs: NavTab<Tab>[] = [
-    { id: 'today', label: 'Сьогодні', count: today ? today.main.length + today.small.length : 0, tip: 'Ctrl + 1' },
-    { id: 'inbox', label: 'Вхідні', count: inbox?.length, tip: 'Ctrl + 2' },
-    { id: 'done', label: 'Готово', tip: 'Ctrl + 3' },
-    { id: 'notebook', label: 'Блокнот', tip: 'Ctrl + 4' },
+    { id: 'today', label: 'Сьогодні', icon: 'sun', count: today ? today.main.length + today.small.length : 0, tip: 'Ctrl + 1' },
+    { id: 'inbox', label: 'Вхідні', icon: 'inbox', count: inbox?.length, tip: 'Ctrl + 2' },
+    { id: 'done', label: 'Готово', icon: 'check', tip: 'Ctrl + 3' },
+    { id: 'notebook', label: 'Блокнот', icon: 'notebook', tip: 'Ctrl + 4' },
   ]
 
   const onOpen = (id: string) => setFocusId(id)
 
   return (
-    <div className="flex h-full flex-col bg-canvas">
+    <div className="app-shell flex h-full flex-col bg-canvas">
       <AppHeader
         tabs={tabs}
         active={tab}
         onSelect={go}
         actions={
           <>
-            {update.kind === 'ready' && <UpdatePill version={update.version} onClick={() => window.kast.updates.install()} />}
+            {update.kind === 'ready' && <UpdatePill version={update.version} onClick={installUpdate} />}
             <RoundButton
               icon="cog"
               label="Налаштування"

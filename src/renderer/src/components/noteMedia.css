@@ -37,3 +37,8 @@
 .note-editor[aria-readonly='true'] .note-media-drag { display: none; }
 .note-editor[aria-readonly='true'] .note-video-badge { left: 10px; }
 @media (prefers-reduced-motion: reduce) { .note-media-drag { transition: none; } }
+@media (max-width: 767px) and (hover: none), (max-width: 767px) and (pointer: coarse) {
+  .note-media-drag { width: 44px; height: 44px; border-radius: 22px; opacity: 1; cursor: pointer; touch-action: manipulation; }
+  .note-editor .note-video-badge { left: 62px; }
+  .note-editor[aria-readonly='true'] .note-video-badge { left: 10px; }
+}

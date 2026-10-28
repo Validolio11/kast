@@ -1,6 +1,6 @@
 # Новий реліз: оновіть "version" у package.json, потім
 #   git tag v0.1.1 && git push origin v0.1.1
-# Workflow збере інсталятор і опублікує його разом із latest.yml —
+# Workflow збере інсталятор Windows (з latest.yml) і підписаний APK для Android в одному релізі —
 # встановлені копії Kast побачать оновлення протягом 4 годин (або одразу після запуску).
 name: Release
 
@@ -35,5 +35,45 @@ jobs:
       - name: Publish release
         shell: bash
         run: gh release create "${{ github.ref_name }}" dist/Kast-Setup-*.exe dist/Kast-Setup-*.exe.blockmap dist/latest.yml --title "Kast ${{ github.ref_name }}" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Android: підписаний постійним ключем APK додається в той самий реліз.
+  # Kast на телефоні бачить новий Kast-Android-<версія>.apk і пропонує його завантажити.
+  android:
+    needs: windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:mobile
+      - name: Restore signing key
+        shell: bash
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/kast-release.jks"
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      - run: chmod +x android/gradlew
+      - name: Build signed APK
+        run: pnpm build:android:release
+        env:
+          RENDERER_VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          RENDERER_VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          KAST_KEYSTORE: ${{ runner.temp }}/kast-release.jks
+          KAST_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      - name: Attach APK to the release
+        shell: bash
+        run: gh release upload "${{ github.ref_name }}" dist/android/Kast-Android-*.apk
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

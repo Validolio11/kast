@@ -24,6 +24,7 @@ export function KastMark({ size = 44 }: { size?: number }) {
 export interface NavTab<T extends string> {
   id: T
   label: string
+  icon?: IconName
   /** Нейтральна цифра поруч (не червоний бейдж) */
   count?: number
   tip?: string
@@ -44,9 +45,10 @@ export function AppHeader<T extends string>({
   windowControls?: ReactNode
 }) {
   return (
-    <header className="drag grid min-h-[76px] shrink-0 grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-4 py-4 pr-4 pl-6 select-none">
+    <header className="app-header drag grid min-h-[76px] shrink-0 grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-4 py-4 pr-4 pl-6 select-none">
       <KastMark />
-      <nav aria-label="Розділи" className="flex justify-center gap-1">
+      <span className="mobile-current-title">{tabs.find((t) => t.id === active)?.label}</span>
+      <nav aria-label="Розділи" className="app-nav flex justify-center gap-1">
         {tabs.map((t) => {
           const on = t.id === active
           return (
@@ -56,17 +58,18 @@ export function AppHeader<T extends string>({
               aria-current={on ? 'page' : undefined}
               data-tip={t.tip}
               className={cn(
-                'no-drag inline-flex h-11 shrink-0 items-center gap-2 rounded-full px-5 text-[15px] whitespace-nowrap transition-colors duration-150 max-[900px]:px-4',
+                'app-nav-item no-drag inline-flex h-11 shrink-0 items-center gap-2 rounded-full px-5 text-[15px] whitespace-nowrap transition-colors duration-150 max-[900px]:px-4',
                 on ? 'bg-paper font-extrabold text-ink' : 'font-semibold text-grey hover:bg-tile hover:text-paper',
               )}
             >
-              {t.label}
-              {!!t.count && <span className={cn('text-[13px] font-bold tabular-nums', on ? 'text-paper-muted' : 'text-muted')}>{t.count}</span>}
+              {t.icon && <Icon name={t.icon} size={21} className="mobile-nav-icon" />}
+              <span>{t.label}</span>
+              {!!t.count && <span className={cn('app-nav-count text-[13px] font-bold tabular-nums', on ? 'text-paper-muted' : 'text-muted')}>{t.count}</span>}
             </button>
           )
         })}
       </nav>
-      <div className="no-drag flex items-center justify-end gap-2">
+      <div className="app-header-actions no-drag flex items-center justify-end gap-2">
         {actions}
         {windowControls}
       </div>
@@ -87,7 +90,7 @@ export function WindowControls({
 }) {
   const btn = 'grid size-9 place-items-center rounded-full text-soft transition-colors hover:bg-steel hover:text-white'
   return (
-    <div className="ml-2 flex shrink-0 items-center gap-0.5 rounded-[26px] bg-tile p-1">
+    <div className="desktop-window-controls ml-2 flex shrink-0 items-center gap-0.5 rounded-[26px] bg-tile p-1">
       <button className={btn} onClick={onMinimize} aria-label="Згорнути">
         <Icon name="minus" size={16} />
       </button>
@@ -144,7 +147,7 @@ export function RoundButton({
  */
 export function PageHead({ light, heavy, sub, actions }: { light: string; heavy: string; sub?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="mb-7 flex animate-enter items-start justify-between gap-5">
+    <div className="page-head mb-7 flex animate-enter items-start justify-between gap-5">
       <div className="flex min-w-0 flex-col items-start gap-3.5">
         <h1 className="text-[clamp(44px,min(6vw,9vh),80px)] leading-[0.92] tracking-[-0.035em] uppercase">
           <span className="block font-light">{light}</span>
@@ -162,16 +165,16 @@ export function PageGrid({ side, main, fill }: { side: ReactNode; main: ReactNod
   return (
     <div
       className={cn(
-        'grid min-w-0 grid-cols-[400px_minmax(0,1fr)] items-start gap-6 max-[1039px]:grid-cols-1',
+        'page-grid grid min-w-0 grid-cols-[400px_minmax(0,1fr)] items-start gap-6 max-[1039px]:grid-cols-1',
         fill && 'items-stretch',
       )}
     >
       {/* fill: ліва колонка не розтягує рядок (h-0), а займає рівно висоту основної */}
-      <div className={cn('enter-stagger flex min-w-0 flex-col gap-3 [--enter-base:80ms]', fill && 'min-[1040px]:h-0 min-[1040px]:min-h-full')}>
+      <div className={cn('page-grid-side enter-stagger flex min-w-0 flex-col gap-3 [--enter-base:80ms]', fill && 'min-[1040px]:h-0 min-[1040px]:min-h-full')}>
         {side}
       </div>
       {/* Перший список у колонці починається без верхнього відступу — рівно з полем ліворуч */}
-      <div className={cn('enter-stagger flex min-w-0 flex-col gap-3 [--enter-base:160ms] [&>section:first-child>h2]:mt-0')}>
+      <div className={cn('page-grid-main enter-stagger flex min-w-0 flex-col gap-3 [--enter-base:160ms] [&>section:first-child>h2]:mt-0')}>
         {main}
       </div>
     </div>
@@ -190,7 +193,7 @@ export interface CaptureFieldProps extends Omit<InputHTMLAttributes<HTMLInputEle
 
 /** Капсула 56px на tile: пишеш і Enter. Фокус — внутрішня зелена обвідка, як у пошуку Karkas. */
 export const CaptureField = forwardRef<HTMLInputElement, CaptureFieldProps>(function CaptureField(
-  { icon = 'plus', onSubmit, search, action, className, value, ...rest },
+  { icon = 'plus', onSubmit, search, action, className, value, autoFocus, ...rest },
   ref,
 ) {
   const has = typeof value === 'string' && value.trim().length > 0
@@ -210,6 +213,7 @@ export const CaptureField = forwardRef<HTMLInputElement, CaptureFieldProps>(func
       <input
         ref={ref}
         value={value}
+        autoFocus={autoFocus && !matchMedia('(max-width: 767px)').matches}
         className="h-full min-w-0 flex-1 bg-transparent text-[16px] font-semibold text-paper caret-growth outline-none placeholder:text-muted"
         {...rest}
       />
@@ -351,7 +355,7 @@ export function PulseRow({
   return (
     <div
       className={cn(
-        'group row-enter relative flex min-h-[60px] items-center gap-3.5 rounded-[30px] pr-4 pl-3.5 transition-colors duration-150',
+        'pulse-row group row-enter relative flex min-h-[60px] items-center gap-3.5 rounded-[30px] pr-4 pl-3.5 transition-colors duration-150',
         finishing && 'animate-row-away',
         selected ? 'bg-steel' : 'shadow-[inset_0_0_0_1px_var(--color-tile)] hover:bg-tile',
         onClick && 'cursor-pointer',
@@ -376,7 +380,7 @@ export function PulseRow({
       </div>
       {actions && (
         <div
-          className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100"
+          className="pulse-row-actions flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100"
           onClick={(e) => e.stopPropagation()}
         >
           {actions}
@@ -384,7 +388,7 @@ export function PulseRow({
       )}
       {(meta || age) && (
         <div
-          className={cn('flex shrink-0 items-center gap-2 text-[13px] font-semibold text-muted transition-opacity duration-200', finishing && 'opacity-0')}
+          className={cn('pulse-row-meta flex shrink-0 items-center gap-2 text-[13px] font-semibold text-muted transition-opacity duration-200', finishing && 'opacity-0')}
           onClick={(e) => e.stopPropagation()}
         >
           {age && <AgeScale {...age} />}
@@ -571,7 +575,7 @@ export function SegTabs<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className={cn('flex w-fit max-w-full flex-wrap gap-1 rounded-[26px] p-1', surface === 'tile' ? 'bg-tile' : 'bg-canvas')}
+      className={cn('seg-tabs flex w-fit max-w-full flex-wrap gap-1 rounded-[26px] p-1', surface === 'tile' ? 'bg-tile' : 'bg-canvas')}
       onKeyDown={(e) => {
         const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
         if (!dir) return
@@ -799,12 +803,12 @@ export function WeekStrip({ days }: { days: { label: string; count: number; toda
 /* ───────────── Налаштування ───────────── */
 export function SettingRow({ title, text, children }: { title: string; text?: ReactNode; children?: ReactNode }) {
   return (
-    <div className="flex min-h-[52px] items-center justify-between gap-3 px-1 py-2">
+    <div className="setting-row flex min-h-[52px] items-center justify-between gap-3 px-1 py-2">
       <div className="min-w-0">
         <div className="text-[16px] font-bold">{title}</div>
         {text && <div className="mt-0.5 text-[13px] font-semibold text-muted">{text}</div>}
       </div>
-      {children && <div className="shrink-0">{children}</div>}
+      {children && <div className="setting-row-controls shrink-0">{children}</div>}
     </div>
   )
 }
@@ -863,6 +867,14 @@ export function ContextMenu({
       }
     }
     const close = () => onClose()
+    // Відкриття клавіатури змінює розмір WebView; меню з пошуком шрифту має лишатись відкритим.
+    const resize = () => { if (!matchMedia('(max-width: 767px)').matches) onClose() }
+    const back = (e: Event) => {
+      if (e.defaultPrevented) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      onClose()
+    }
     // Прокрутка сторінки закриває меню; прокрутка всередині (список шрифтів) — ні
     const scroll = (e: Event) => {
       if (!ref.current?.contains(e.target as Node)) onClose()
@@ -871,13 +883,15 @@ export function ContextMenu({
     document.addEventListener('scroll', scroll, true)
     document.addEventListener('keydown', key, true)
     window.addEventListener('blur', close)
-    window.addEventListener('resize', close)
+    window.addEventListener('resize', resize)
+    document.addEventListener('kast:back', back, true)
     return () => {
       document.removeEventListener('pointerdown', down, true)
       document.removeEventListener('scroll', scroll, true)
       document.removeEventListener('keydown', key, true)
       window.removeEventListener('blur', close)
-      window.removeEventListener('resize', close)
+      window.removeEventListener('resize', resize)
+      document.removeEventListener('kast:back', back, true)
     }
   }, [onClose])
 
@@ -900,7 +914,7 @@ export function ContextMenu({
         if ((e.target as HTMLElement).closest('button')) e.preventDefault()
       }}
       onContextMenu={(e) => e.preventDefault()}
-      className="no-drag fixed z-[130] flex w-[288px] origin-top-left animate-menu-in flex-col gap-0.5 rounded-[26px] bg-canvas p-1.5 text-white shadow-menu"
+      className="context-menu no-drag fixed z-[130] flex w-[288px] origin-top-left animate-menu-in flex-col gap-0.5 rounded-[26px] bg-canvas p-1.5 text-white shadow-menu"
       style={pos}
     >
       {header && <div className="mb-1 border-b border-tile px-1 pt-1 pb-2.5">{header}</div>}

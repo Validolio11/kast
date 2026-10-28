@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kast</string>
+    <string name="title_activity_main">Kast</string>
+    <string name="package_name">com.kast.app</string>
+    <string name="custom_url_scheme">com.kast.app</string>
+</resources>

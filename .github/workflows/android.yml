@@ -1,0 +1,47 @@
+# Ручна перевірка Android-збірки (Actions → Android APK → Run workflow).
+# Збирає такий самий підписаний APK, як у релізі, але лише як артефакт — без публікації.
+name: Android APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test:mobile
+      - name: Restore signing key
+        shell: bash
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/kast-release.jks"
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      - run: chmod +x android/gradlew
+      - run: pnpm build:android:release
+        env:
+          RENDERER_VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          RENDERER_VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          KAST_KEYSTORE: ${{ runner.temp }}/kast-release.jks
+          KAST_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kast-Android
+          path: dist/android/*.apk
+          if-no-files-found: error

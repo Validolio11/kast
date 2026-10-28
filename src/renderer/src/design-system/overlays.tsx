@@ -13,7 +13,7 @@ function useDialogBehavior(ref: React.RefObject<HTMLElement | null>, active: boo
     const overflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const el = ref.current
-    ;(el?.querySelector<HTMLElement>('[data-autofocus]') ?? el?.querySelector<HTMLElement>(FOCUSABLE) ?? el)?.focus()
+    ;(matchMedia('(max-width: 767px)').matches ? el : el?.querySelector<HTMLElement>('[data-autofocus]') ?? el?.querySelector<HTMLElement>(FOCUSABLE) ?? el)?.focus()
     const trap = (e: KeyboardEvent) => {
       if (e.key !== 'Tab' || !el) return
       const nodes = Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE))
@@ -37,6 +37,23 @@ function useDialogBehavior(ref: React.RefObject<HTMLElement | null>, active: boo
   }, [active, ref])
 }
 
+/** Вкладене меню має першість; із кількох діалогів Back закриває лише верхній. */
+function useAndroidBack(ref: React.RefObject<HTMLElement | null>, active: boolean, onClose: () => void) {
+  useEffect(() => {
+    if (!active) return
+    const back = (e: Event) => {
+      if (e.defaultPrevented || document.querySelector('[role="menu"]')) return
+      const dialogs = document.querySelectorAll('[data-dialog-open]')
+      if (dialogs[dialogs.length - 1] !== ref.current) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      onClose()
+    }
+    document.addEventListener('kast:back', back, true)
+    return () => document.removeEventListener('kast:back', back, true)
+  }, [active, onClose, ref])
+}
+
 interface WindowProps {
   open: boolean
   onClose: () => void
@@ -53,9 +70,10 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   const uid = useUid('modal')
   useEscape(onClose, open)
   useDialogBehavior(ref, open)
+  useAndroidBack(ref, open, onClose)
   if (!mounted) return null
   return createPortal(
-    <div className="fixed inset-0 z-[100] grid place-items-center p-4">
+    <div className="modal-root fixed inset-0 z-[100] grid place-items-center p-4">
       <div
         onClick={onClose}
         aria-hidden
@@ -66,17 +84,18 @@ export function Modal({ open, onClose, title, description, children, footer, siz
       <div
         ref={ref}
         role="dialog"
+        data-dialog-open={open ? '' : undefined}
         aria-modal="true"
         aria-labelledby={`${uid}-t`}
         aria-describedby={description ? `${uid}-d` : undefined}
         tabIndex={-1}
         className={cn(
-          'no-drag relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-panel bg-tile shadow-dialog outline-none',
+          'modal-panel no-drag relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-panel bg-tile shadow-dialog outline-none',
           { sm: 'max-w-sm', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-[920px]' }[size],
           state === 'open' ? 'animate-modal-in' : 'animate-modal-out',
         )}
       >
-        <div className="flex items-start justify-between gap-4 p-8 pb-2">
+        <div className="dialog-header flex items-start justify-between gap-4 p-8 pb-2">
           <div>
             <h2 id={`${uid}-t`} className="text-[30px] leading-[1.05] font-extrabold tracking-[-0.03em]">
               {title}
@@ -96,8 +115,8 @@ export function Modal({ open, onClose, title, description, children, footer, siz
           </button>
         </div>
         {/* Смуга прокрутки — всередині панелі, не на заокругленому краю */}
-        {children && <div className="mr-3 mb-3 overflow-y-auto py-4 pr-5 pl-8">{children}</div>}
-        {footer && <div className="flex flex-wrap justify-end gap-2 p-8 pt-4">{footer}</div>}
+        {children && <div className="dialog-body mr-3 mb-3 overflow-y-auto py-4 pr-5 pl-8">{children}</div>}
+        {footer && <div className="dialog-footer flex flex-wrap justify-end gap-2 p-8 pt-4">{footer}</div>}
       </div>
     </div>,
     document.body,
@@ -111,6 +130,7 @@ export function Sheet({ open, onClose, title, description, children, footer, sid
   const uid = useUid('sheet')
   useEscape(onClose, open)
   useDialogBehavior(ref, open)
+  useAndroidBack(ref, open, onClose)
   if (!mounted) return null
   const anim = {
     bottom: { open: 'animate-sheet-bottom-in', closed: 'animate-sheet-bottom-out' },
@@ -127,11 +147,12 @@ export function Sheet({ open, onClose, title, description, children, footer, sid
       <div
         ref={ref}
         role="dialog"
+        data-dialog-open={open ? '' : undefined}
         aria-modal="true"
         aria-labelledby={`${uid}-t`}
         tabIndex={-1}
         className={cn(
-          'no-drag absolute flex flex-col bg-graphite shadow-[0_0_120px_-10px_rgba(0,0,0,1)] ring-1 ring-white/10 outline-none',
+          'sheet-panel no-drag absolute flex flex-col bg-graphite shadow-[0_0_120px_-10px_rgba(0,0,0,1)] ring-1 ring-white/10 outline-none',
           side === 'bottom'
             ? 'inset-x-0 bottom-0 mx-auto max-h-[88vh] w-full max-w-2xl rounded-t-[40px]'
             : 'inset-y-0 right-0 w-full max-w-md rounded-l-[40px]',
@@ -139,7 +160,7 @@ export function Sheet({ open, onClose, title, description, children, footer, sid
         )}
       >
         {side === 'bottom' && <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-steel" aria-hidden />}
-        <div className="flex items-center justify-between gap-4 p-6 pb-2 md:p-8 md:pb-2">
+        <div className="dialog-header flex items-center justify-between gap-4 p-6 pb-2 md:p-8 md:pb-2">
           <div>
             <h2 id={`${uid}-t`} className="text-[22px] leading-tight font-bold tracking-tight">
               {title}
@@ -148,8 +169,8 @@ export function Sheet({ open, onClose, title, description, children, footer, sid
           </div>
           <IconButton icon="x" label="Закрити" onClick={onClose} />
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-4 md:px-8">{children}</div>
-        {footer && <div className="flex flex-wrap justify-end gap-3 p-6 md:p-8">{footer}</div>}
+        <div className="dialog-body flex-1 overflow-y-auto px-6 py-4 md:px-8">{children}</div>
+        {footer && <div className="dialog-footer flex flex-wrap justify-end gap-3 p-6 md:p-8">{footer}</div>}
       </div>
     </div>,
     document.body,
@@ -250,7 +271,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         <div
           role="region"
           aria-label="Сповіщення"
-          className="no-drag pointer-events-none fixed inset-x-0 bottom-6 z-[120] flex flex-col items-center gap-3 px-4"
+          className="toast-region no-drag pointer-events-none fixed inset-x-0 bottom-6 z-[120] flex flex-col items-center gap-3 px-4"
         >
           {items.map((t) => (
             <ToastView key={t.id} item={t} onDone={() => dismiss(t.id)} />

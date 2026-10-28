@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button, Icon, SettingRow, syncLabel, SyncDot, useToast } from '@/design-system'
 import { supabase } from './client'
 import { cancelGoogle, sendCode, signInWithGoogle, signOut, useSync, verifyCode } from './engine'
+import { isNativeMobile } from '@/lib/platform'
+import { takeMobileAuthError } from '@/lib/mobileAuth'
 
 /** Знак Google для кнопки входу (офіційні кольори) */
 function GoogleMark() {
@@ -26,8 +28,18 @@ export function SyncSection() {
   const [address, setAddress] = useState('')
   const [busy, setBusy] = useState(false)
   const toast = useToast()
+  useEffect(() => {
+    if (!isNativeMobile) return
+    const report = () => {
+      const error = takeMobileAuthError()
+      if (error) toast({ kind: 'error', title: 'Не вдалося увійти через Google', text: error })
+    }
+    report()
+    document.addEventListener('kast:auth-error', report)
+    return () => document.removeEventListener('kast:auth-error', report)
+  }, [toast])
 
-  if (!supabase) return <SettingRow title="Лише на цьому ПК" text="Синхронізація ще не налаштована: потрібні ключі Supabase у файлі .env" />
+  if (!supabase) return <SettingRow title="Лише на цьому пристрої" text="Синхронізацію ще не налаштовано для цієї версії Kast" />
 
   if (email)
     return (
@@ -61,7 +73,7 @@ export function SyncSection() {
     setBusy(true)
     try {
       await signInWithGoogle()
-      toast({ title: 'Синхронізацію увімкнено', text: 'Задачі й нотатки тепер на всіх ваших ПК' })
+      toast({ title: 'Синхронізацію увімкнено', text: 'Задачі й нотатки тепер на всіх ваших пристроях' })
     } catch (err) {
       const msg = (err as Error).message
       if (msg !== 'cancelled') toast({ kind: 'error', title: 'Не вдалося увійти через Google', text: msg })
@@ -83,7 +95,7 @@ export function SyncSection() {
         setMode('code')
       } else {
         await verifyCode(address, v)
-        toast({ title: 'Синхронізацію увімкнено', text: 'Задачі й нотатки тепер на всіх ваших ПК' })
+        toast({ title: 'Синхронізацію увімкнено', text: 'Задачі й нотатки тепер на всіх ваших пристроях' })
       }
     } catch (err) {
       toast({ kind: 'error', title: mode === 'email' ? 'Не вдалося надіслати код' : 'Код не підійшов', text: (err as Error).message })
@@ -94,7 +106,7 @@ export function SyncSection() {
 
   return (
     <div className="flex flex-col gap-3 pb-2">
-      <SettingRow title="На всіх ваших ПК" text="Увійдіть, і задачі та нотатки будуть однакові всюди. Без входу все лишається на цьому ПК." />
+      <SettingRow title="На всіх ваших пристроях" text="Увійдіть, і задачі та нотатки будуть однакові всюди. Без входу все лишається на цьому пристрої." />
       {mode === 'google' ? (
         <div className="flex flex-wrap items-center gap-2">
           {busy ? (

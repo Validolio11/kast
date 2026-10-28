@@ -14,6 +14,7 @@ import { age, fmtTime, pluralWord } from '@/lib/time'
 export function Notebook({ captureRef }: { captureRef: React.RefObject<HTMLInputElement | null> }) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
+  const [mobileDetail, setMobileDetail] = useState(false)
   const titleRef = useRef<HTMLInputElement>(null)
   const loaded = useNotes()
   const notes = loaded ?? []
@@ -22,14 +23,28 @@ export function Notebook({ captureRef }: { captureRef: React.RefObject<HTMLInput
   const shown = q ? notes.filter((n) => n.body.toLowerCase().includes(q)) : notes
   const current = notes.find((n) => n.id === selected) ?? shown[0]
 
+  const backToList = useCallback(() => setMobileDetail(false), [])
+  useEffect(() => {
+    const back = (e: Event) => {
+      if (e.defaultPrevented || !mobileDetail || document.querySelector('[data-dialog-open], [role="menu"]')) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      backToList()
+    }
+    document.addEventListener('kast:back', back, true)
+    return () => document.removeEventListener('kast:back', back, true)
+  }, [mobileDetail, backToList])
+
   const create = async (first = '') => {
     setQuery('')
     const n = await createNote(first ? `${first}\n` : '')
     setSelected(n.id)
+    setMobileDetail(true)
     requestAnimationFrame(() => titleRef.current?.focus())
   }
 
   return (
+    <div className="notebook-view h-full" data-detail={mobileDetail}>
     <Page
       light="Мій"
       heavy="блокнот"
@@ -57,7 +72,7 @@ export function Notebook({ captureRef }: { captureRef: React.RefObject<HTMLInput
           />
           <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pb-1 min-[1040px]:flex-1">
             {shown.map((n) => (
-              <NoteTile key={n.id} note={n} selected={n.id === current?.id} onClick={() => setSelected(n.id)} />
+              <NoteTile key={n.id} note={n} selected={n.id === current?.id} onClick={() => { setSelected(n.id); setMobileDetail(true) }} />
             ))}
             {loaded && q && !shown.length && (
               <p className="px-4 py-2 text-[14px] font-semibold text-muted">Нічого не знайдено. Enter — створити нотатку «{query.trim()}».</p>
@@ -67,7 +82,7 @@ export function Notebook({ captureRef }: { captureRef: React.RefObject<HTMLInput
       }
       main={
         current ? (
-          <Sheet key={current.id} note={current} titleRef={titleRef} onDeleted={() => setSelected(null)} />
+          <Sheet key={current.id} note={current} titleRef={titleRef} onBack={backToList} onDeleted={() => { setSelected(null); backToList() }} />
         ) : (
           loaded && (
             <InfoRow icon="notebook" title="Нотаток ще немає">
@@ -79,6 +94,7 @@ export function Notebook({ captureRef }: { captureRef: React.RefObject<HTMLInput
         )
       }
     />
+    </div>
   )
 }
 
@@ -106,7 +122,7 @@ function NoteTile({ note, selected, onClick }: { note: Note; selected: boolean; 
 }
 
 /** Аркуш нотатки: заголовок — перший рядок, далі форматований текст. Зберігається сам. */
-function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefObject<HTMLInputElement | null>; onDeleted: () => void }) {
+function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: React.RefObject<HTMLInputElement | null>; onDeleted: () => void; onBack: () => void }) {
   const toast = useToast()
   const editorRef = useRef<RichNoteHandle>(null)
   const split = (body: string) => {
@@ -235,9 +251,10 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
 
   return (
     // Фіксований розмір за будь-якої ширини вікна; довгий текст прокручується всередині
-    <section className="relative flex h-[720px] flex-col rounded-panel bg-paper p-10 pb-6 text-ink max-[640px]:p-6" {...drop.dropProps}>
+    <section className="notebook-sheet relative flex h-[720px] flex-col rounded-panel bg-paper p-10 pb-6 text-ink max-[640px]:p-6" {...drop.dropProps}>
       <DropHint show={drop.over} />
-      <div className="flex items-center gap-3">
+      <button className="notebook-back" onClick={onBack}><Icon name="chevronLeft" size={18} /> Усі нотатки</button>
+      <div className="notebook-sheet-meta flex items-center gap-3">
         {!!note.pinned && <PulseChip tone="growth">Закріплено</PulseChip>}
         {locked && <PulseChip tone="canvas">Лише читання</PulseChip>}
         <span className="text-[14px] font-bold text-dim">
@@ -279,7 +296,8 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
         />
       </div>
       {/* Підвал як у Karkas: дія ліворуч, сторінки по центру, закріпити й видалити праворуч; тісно — переноситься */}
-      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-paper-line pt-4">
+      <div className="notebook-sheet-footer mt-4 flex flex-wrap items-center gap-2 border-t border-paper-line pt-4">
+        <div className="notebook-convert-action">
         {locked ? (
           <Button variant="canvas" size="md" iconLeft="pencil" onClick={toggleLock}>
             Редагувати
@@ -289,7 +307,8 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
             Рядок у задачі
           </Button>
         )}
-        <div className="flex flex-1 justify-center">
+        </div>
+        <div className="notebook-page-controls flex flex-1 justify-center">
           <div
             role="tablist"
             aria-label="Сторінки"
@@ -332,6 +351,12 @@ function Sheet({ note, titleRef, onDeleted }: { note: Note; titleRef: React.RefO
               </button>
             )}
           </div>
+          {!locked && pages.length > 1 && (
+            <button className="notebook-page-menu" aria-label={`Дії сторінки ${page + 1}`} onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect()
+              setPageMenu({ x: rect.left, y: rect.bottom, index: page })
+            }}><Icon name="more" size={20} /></button>
+          )}
         </div>
         {!locked && <AddImageButton onFiles={(files) => editorRef.current?.insertImages(files)} />}
         {!locked && <RoundButton icon="lock" tone="paper-line" label="Заблокувати редагування" onClick={toggleLock} />}

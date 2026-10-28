@@ -53,7 +53,7 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
   }
 
   return (
-    <div data-entering={entering} className="h-full overflow-y-auto">
+    <div data-entering={entering} className="focus-view h-full overflow-y-auto">
       <div className="mx-auto flex w-full max-w-[1280px] flex-col px-8 pt-6 pb-16 max-[640px]:px-4">
         <div className="mb-7 flex animate-enter items-start gap-5">
           <RoundButton icon="chevronLeft" size={56} label="Назад · Esc" onClick={onClose} />
@@ -67,7 +67,8 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
               value={task.title}
               placeholder="Назва задачі"
               onSave={(title) => title.trim() && update(task.id, { title: title.trim() })}
-              className="text-[clamp(32px,min(4.4vw,7vh),56px)] leading-[0.95] font-extrabold tracking-[-0.04em] text-paper"
+              wrap
+              className="focus-title text-[clamp(32px,min(4.4vw,7vh),56px)] leading-[0.95] font-extrabold tracking-[-0.04em] text-paper"
             />
           </div>
         </div>
@@ -76,7 +77,7 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
           side={
             <>
               {isToday && <Timer task={task} />}
-              <Card className="flex flex-col gap-4 p-7">
+              <Card className="focus-meta flex flex-col gap-4 p-7">
                 {isToday ? (
                   <>
                     <Group label="Коли зроблю">
@@ -125,7 +126,7 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
                   onClose()
                   toast({ kind: 'info', icon: 'trash', title: 'Задачу видалено', action: { label: 'Скасувати', onClick: () => update(task.id, { deleted: 0 }) } })
                 }}
-                className="flex h-11 items-center gap-2 self-start rounded-full px-4 text-[14px] font-bold text-muted transition-colors hover:bg-tile hover:text-danger-text"
+                className="focus-delete flex h-11 items-center gap-2 self-start rounded-full px-4 text-[14px] font-bold text-muted transition-colors hover:bg-tile hover:text-danger-text"
               >
                 <Icon name="trash" size={16} />
                 Видалити задачу
@@ -166,7 +167,7 @@ function TaskNotes({ task }: { task: Task }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   return (
-    <section className="relative flex min-h-[320px] flex-col rounded-panel bg-paper p-7 text-ink" {...drop.dropProps}>
+    <section className="focus-notes relative flex min-h-[320px] flex-col rounded-panel bg-paper p-7 text-ink" {...drop.dropProps}>
       <DropHint show={drop.over} />
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">Нотатки</h2>
@@ -270,7 +271,7 @@ function StepCard({ task }: { task: Task }) {
     setMore('')
   }
   return (
-    <Card className="flex flex-col gap-3 p-7">
+    <Card className="focus-step flex flex-col gap-3 p-7">
       <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">{steps ? 'Наступний крок' : 'Перший крок'}</h2>
       <div
         className={cn(
@@ -395,6 +396,7 @@ function Field({
   onSave,
   placeholder,
   multiline,
+  wrap,
   focusKey,
   className,
 }: {
@@ -402,6 +404,8 @@ function Field({
   onSave: (v: string) => void
   placeholder?: string
   multiline?: boolean
+  /** Один рядок за змістом, але довгий текст переноситься (назва задачі) */
+  wrap?: boolean
   /** Зміна значення переводить фокус у поле (наприклад, після «Крок зроблено») */
   focusKey?: number
   className?: string
@@ -425,6 +429,22 @@ function Field({
   )
   const cls = cn('w-full caret-growth outline-none', className)
   if (multiline) return <textarea value={v} onChange={(e) => setV(e.target.value)} onBlur={save} placeholder={placeholder} className={cn(cls, 'resize-none')} />
+  if (wrap)
+    return (
+      <textarea
+        rows={1}
+        value={v}
+        onChange={(e) => setV(e.target.value.replace(/\n/g, ' '))}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter') return
+          e.preventDefault()
+          e.currentTarget.blur()
+        }}
+        placeholder={placeholder}
+        className={cn(cls, 'resize-none overflow-hidden [field-sizing:content]')}
+      />
+    )
   return (
     <input
       ref={inputRef}
@@ -497,7 +517,7 @@ function Timer({ task }: { task: Task }) {
   const remaining = minutes ? left / (minutes * 60) : 0
 
   return (
-    <section className="flex flex-col gap-4 rounded-tile bg-data p-7 text-white">
+    <section className="focus-timer flex flex-col gap-4 rounded-tile bg-data p-7 text-white">
       <div className="flex items-center justify-between gap-3">
         <span className="text-[14px] font-bold text-white/80">{running ? 'Йде фокус' : 'Таймбокс'}</span>
         <div className="flex gap-1 rounded-full bg-canvas/25 p-1">

@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
-import type { Settings, UpdateState } from '../../../shared/types'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import type { UpdateState } from '../../../shared/types'
 import { dayKey, nowDate } from './time'
+import { getPlatformSettingsSnapshot, isDesktop, isNativeMobile, loadPlatformSettings, setPlatformSettings, subscribePlatformSettings } from './platform'
+import { checkAndroidUpdate, getAndroidUpdate, installAndroidUpdate, subscribeAndroidUpdate } from './androidUpdate'
 
 /** Поточний день; оновлюється після півночі без перезапуску */
 export function useDayKey() {
@@ -22,28 +24,28 @@ export function useHour() {
   return h
 }
 
-const fallbackSettings: Settings = { hotkey: 'Control+Shift+Space', eveningHour: 18, notifyEvening: true, launchAtLogin: false }
-
 export function useSettings() {
-  const [s, setS] = useState<Settings>(fallbackSettings)
+  const s = useSyncExternalStore(subscribePlatformSettings, getPlatformSettingsSnapshot)
   useEffect(() => {
-    window.kast?.settings.get().then(setS)
+    void loadPlatformSettings().catch((error) => console.warn('settings unavailable', error))
   }, [])
-  const set = async (patch: Partial<Settings>) => {
-    if (!window.kast) return setS((cur) => ({ ...cur, ...patch }))
-    setS(await window.kast.settings.set(patch))
-  }
-  return [s, set] as const
+  return [s, setPlatformSettings] as const
 }
 
+/** Стан оновлення: на Windows — від electron-updater, на Android — перевірка GitHub Releases */
 export function useUpdateState() {
   const [s, setS] = useState<UpdateState>({ kind: 'idle' })
+  const android = useSyncExternalStore(subscribeAndroidUpdate, getAndroidUpdate)
   useEffect(() => {
-    if (!window.kast) return
+    if (!isDesktop) return
     window.kast.updates.state().then(setS)
     return window.kast.updates.onState(setS)
   }, [])
-  return s
+  return isNativeMobile ? android : s
 }
+
+/** Встановити готове оновлення: Windows перезапускається, Android завантажує APK */
+export const installUpdate = () => (isNativeMobile ? void installAndroidUpdate() : window.kast?.updates.install())
+export const checkForUpdates = () => (isNativeMobile ? void checkAndroidUpdate() : void window.kast?.updates.check())
 
 export const prettyHotkey = (acc: string) => acc.replace('CommandOrControl', 'Ctrl').replace('Control', 'Ctrl').replaceAll('+', ' + ')

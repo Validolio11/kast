@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { isNativeMobile, mobileAuthStorage } from '@/lib/platform'
 
 const url = import.meta.env.RENDERER_VITE_SUPABASE_URL as string | undefined
 const key = import.meta.env.RENDERER_VITE_SUPABASE_ANON_KEY as string | undefined
@@ -7,5 +8,13 @@ const key = import.meta.env.RENDERER_VITE_SUPABASE_ANON_KEY as string | undefine
 // PKCE: вхід через Google повертає одноразовий код, який обмінюємо на сесію в самому застосунку
 export const supabase =
   url && key
-    ? createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true, flowType: 'pkce', detectSessionInUrl: false } })
+    ? createClient(url, key, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          flowType: 'pkce',
+          detectSessionInUrl: false,
+          ...(isNativeMobile ? { storage: mobileAuthStorage } : {}),
+        },
+      })
     : null

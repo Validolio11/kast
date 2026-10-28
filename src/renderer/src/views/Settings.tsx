@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Button, Modal, SettingRow, Stepper, Switch, useToast } from '@/design-system'
-import { prettyHotkey, useSettings, useUpdateState } from '@/lib/hooks'
+import { checkForUpdates, installUpdate, prettyHotkey, useSettings, useUpdateState } from '@/lib/hooks'
 import { SyncSection } from '@/sync/SyncSection'
 import { exportBackup, importBackup } from '@/data/backup'
 import type { UpdateState } from '../../../shared/types'
+import { getAppVersion, isDesktop, isNativeMobile, openBackupFile, saveBackupFile } from '@/lib/platform'
 
 export function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [s, set] = useSettings()
@@ -17,29 +18,35 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
           <Group title="Синхронізація">
             <SyncSection />
           </Group>
-          <Group title={`Дані й версія ${window.kast?.info.version ?? 'dev'}`}>
+          <Group title={`Дані й версія ${getAppVersion()}`}>
             <BackupRow />
-            <UpdateRow />
+            {(isDesktop || isNativeMobile) && <UpdateRow />}
           </Group>
         </div>
         <Group title="Поведінка">
-          <SettingRow title="Швидкий запис" text="Працює з будь-якої програми">
-            <HotkeyInput
-              value={s.hotkey}
-              onChange={(hotkey) =>
-                set({ hotkey }).catch((e: Error) => toast({ kind: 'error', title: 'Не вдалося', text: e.message.replace(/^.*Error: /, '') }))
-              }
-            />
-          </SettingRow>
+          {isDesktop && (
+            <SettingRow title="Швидкий запис" text="Працює з будь-якої програми">
+              <HotkeyInput
+                value={s.hotkey}
+                onChange={(hotkey) =>
+                  set({ hotkey }).catch((e: Error) => toast({ kind: 'error', title: 'Не вдалося', text: e.message.replace(/^.*Error: /, '') }))
+                }
+              />
+            </SettingRow>
+          )}
           <SettingRow title="Вечір починається о" text="Тоді Kast запропонує закрити день">
             <Stepper size="sm" label="Година вечора" value={s.eveningHour} min={14} max={23} unit=":00" onChange={(eveningHour) => set({ eveningHour })} />
           </SettingRow>
-          <SettingRow title="Нагадати ввечері" text="Одне сповіщення, не більше">
-            <Switch label="Нагадати ввечері" checked={s.notifyEvening} onChange={(notifyEvening) => set({ notifyEvening })} />
-          </SettingRow>
-          <SettingRow title="Запуск разом із Windows" text="Тихо у треї — гаряча клавіша одразу працює">
-            <Switch label="Запуск разом із Windows" checked={s.launchAtLogin} onChange={(launchAtLogin) => set({ launchAtLogin })} />
-          </SettingRow>
+          {isDesktop && (
+            <SettingRow title="Нагадати ввечері" text="Одне сповіщення, не більше">
+              <Switch label="Нагадати ввечері" checked={s.notifyEvening} onChange={(notifyEvening) => set({ notifyEvening })} />
+            </SettingRow>
+          )}
+          {isDesktop && (
+            <SettingRow title="Запуск разом із Windows" text="Тихо у треї — гаряча клавіша одразу працює">
+              <Switch label="Запуск разом із Windows" checked={s.launchAtLogin} onChange={(launchAtLogin) => set({ launchAtLogin })} />
+            </SettingRow>
+          )}
         </Group>
       </div>
     </Modal>
@@ -54,8 +61,8 @@ function BackupRow() {
     setBusy(true)
     try {
       const { json, name, count } = await exportBackup()
-      const path = await window.kast.backup.save(json, name)
-      if (path) toast({ title: 'Копію збережено', text: `${count} записів · ${path.split(/[\\/]/).pop()}` })
+      const path = await saveBackupFile(json, name)
+      if (path) toast({ title: isNativeMobile ? 'Копію передано' : 'Копію збережено', text: `${count} записів · ${path.split(/[\\/]/).pop()}` })
     } catch (e) {
       toast({ kind: 'error', title: 'Не вдалося зберегти копію', text: (e as Error).message })
     } finally {
@@ -63,23 +70,26 @@ function BackupRow() {
     }
   }
   const restore = async () => {
+    setBusy(true)
     try {
-      const text = await window.kast.backup.open()
+      const text = await openBackupFile()
       if (text === null) return
       const r = await importBackup(text)
-      const n = r.tasks + r.notes + r.days
-      toast(n ? { title: 'Відновлено', text: `Задач: ${r.tasks}, нотаток: ${r.notes}` } : { kind: 'info', title: 'Усе вже актуальне', text: 'У файлі немає новіших записів' })
+      const n = r.tasks + r.notes + r.days + r.files
+      toast(n ? { title: 'Відновлено', text: `Задач: ${r.tasks}, нотаток: ${r.notes}, фото: ${r.files}` } : { kind: 'info', title: 'Усе вже актуальне', text: 'У файлі немає новіших записів' })
     } catch (e) {
       toast({ kind: 'error', title: 'Не вдалося відновити', text: (e as Error).message })
+    } finally {
+      setBusy(false)
     }
   }
   return (
     <SettingRow title="Резервна копія" text="Усе в одному файлі">
       <div className="flex gap-2">
-        <Button size="sm" variant="steel" iconLeft="download" loading={busy} disabled={!window.kast} onClick={save}>
+        <Button size="sm" variant="steel" iconLeft="download" loading={busy} onClick={save}>
           Зберегти
         </Button>
-        <Button size="sm" variant="ghost" disabled={!window.kast} onClick={restore}>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={restore}>
           Відновити
         </Button>
       </div>
@@ -92,8 +102,8 @@ function UpdateRow() {
   return (
     <SettingRow title="Оновлення" text={updateText(update)}>
       {update.kind === 'ready' ? (
-        <Button size="sm" variant="pulse" onClick={() => window.kast.updates.install()}>
-          Перезапустити
+        <Button size="sm" variant="pulse" onClick={installUpdate}>
+          {isNativeMobile ? 'Завантажити' : 'Перезапустити'}
         </Button>
       ) : (
         <Button
@@ -101,7 +111,7 @@ function UpdateRow() {
           variant="steel"
           loading={update.kind === 'checking' || update.kind === 'downloading'}
           disabled={update.kind === 'dev'}
-          onClick={() => window.kast?.updates.check()}
+          onClick={checkForUpdates}
         >
           Перевірити
         </Button>
@@ -113,7 +123,7 @@ function UpdateRow() {
 /** Група налаштувань: картка canvas усередині діалогу tile */
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-1 rounded-card bg-canvas px-5 py-4">
+    <section className="settings-group flex flex-col gap-1 rounded-card bg-canvas px-5 py-4">
       <h3 className="px-1 pb-1 text-[13px] font-extrabold text-grey">{title}</h3>
       {children}
     </section>
@@ -129,13 +139,15 @@ function updateText(u: UpdateState): string {
     case 'downloading':
       return `Завантажую ${u.version ?? ''} · ${u.percent}%`
     case 'ready':
+      // На Android оновлення — це новий APK: завантажити й підтвердити встановлення
+      if (isNativeMobile) return `Версія ${u.version} — завантажте й встановіть поверх, дані збережуться`
       return `Версія ${u.version} готова${u.notes ? ` — ${u.notes.split('\n')[0]}` : ''}`
     case 'error':
       return 'Не вдалося перевірити. Спробую пізніше'
     case 'none':
       return 'У вас остання версія'
     default:
-      return 'Оновлюється автоматично'
+      return isNativeMobile ? 'Kast сам перевіряє нові версії' : 'Оновлюється автоматично'
   }
 }
 

@@ -9,6 +9,8 @@ import type { RealtimeChannel, Session } from '@supabase/supabase-js'
 import type { SyncState } from '@/design-system'
 import { db, getMeta, setMeta, type Day, type FileRec, type Note, type Syncable, type Task } from '@/data/db'
 import { supabase } from './client'
+import { isNativeMobile } from '@/lib/platform'
+import { cancelGoogleMobile, signInWithGoogleMobile } from '@/lib/mobileAuth'
 
 type Kind = 'task' | 'note' | 'day' | 'file'
 type Row = (Task | Note | Day | FileRec) & Syncable
@@ -234,6 +236,7 @@ export function startSync() {
     return counts.reduce((a, b) => a + b, 0)
   }).subscribe((n) => n > 0 && schedule())
   window.addEventListener('online', () => schedule(100))
+  window.addEventListener('kast:resume', () => schedule(100))
   window.addEventListener('offline', () => session && setSnap({ state: 'offline' }))
   setInterval(() => schedule(0), 5 * 60_000)
 }
@@ -246,6 +249,8 @@ export function startSync() {
  */
 export async function signInWithGoogle() {
   if (!supabase) throw new Error('Синхронізацію ще не налаштовано')
+  if (isNativeMobile) return signInWithGoogleMobile()
+  if (!window.kast?.auth) throw new Error('Для входу відкрийте Kast на телефоні або комп’ютері')
   const redirectTo = await window.kast.auth.prepare()
   try {
     const { data, error } = await supabase.auth.signInWithOAuth({
@@ -262,7 +267,7 @@ export async function signInWithGoogle() {
   }
 }
 
-export const cancelGoogle = () => window.kast?.auth.cancel()
+export const cancelGoogle = () => isNativeMobile ? cancelGoogleMobile() : window.kast?.auth.cancel()
 
 export async function sendCode(email: string) {
   const { error } = await supabase!.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })

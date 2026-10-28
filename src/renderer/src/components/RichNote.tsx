@@ -480,8 +480,13 @@ export const RichNote = forwardRef<RichNoteHandle, {
   const onClick = async (e: React.MouseEvent) => {
     // Клік по фото — перегляд у повному розмірі
     const target = e.target as HTMLElement
-    if (target.closest('.note-media-drag') || performance.now() < suppressMediaClickUntil.current) {
+    const handle = target.closest('.note-media-drag')
+    if (handle || performance.now() < suppressMediaClickUntil.current) {
       e.preventDefault()
+      if (handle && !readOnly && matchMedia('(hover: none), (pointer: coarse)').matches) {
+        const media = handle.closest('.note-img') as HTMLElement | null
+        if (media) openMenu(e.clientX, e.clientY, null, media)
+      }
       return
     }
     const vid = target.closest('.note-video') as HTMLElement | null
