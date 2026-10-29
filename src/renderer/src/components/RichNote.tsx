@@ -1203,18 +1203,52 @@ function ImageBar({ box, onChange }: { box: HTMLElement; onChange: (patch: { siz
   )
 }
 
-/** Ряд кольорів: «без кольору» і палітра; кружечки з обідком, щоб темні кольори було видно на темному меню */
-function Swatches({ label, options, value, onPick }: { label: string; options: { value: string; label: string }[]; value: string; onPick: (v: string) => void }) {
+type ColorMode = 'color' | 'background-color'
+const COLOR_MODES: { value: ColorMode; label: string }[] = [
+  { value: 'color', label: 'Текст' },
+  { value: 'background-color', label: 'Маркер' },
+]
+/** Як колір виглядатиме на папері нотатки (маркер напівпрозорий) */
+const onPaper = (c: string) => `linear-gradient(${c}, ${c}), var(--color-paper)`
+
+/** Колір: перемикач «Текст / Маркер» і одна палітра для вибраного */
+function ColorPicker({ own, onStyle }: { own: Record<StyleProp, string>; onStyle: (prop: StyleProp, value: string) => void }) {
+  const [mode, setMode] = useState<ColorMode>('color')
+  const options = mode === 'color' ? TEXT_COLORS : MARKS
+  const value = own[mode]
   return (
-    <div className="flex flex-col gap-1">
-      <span className="px-1 text-[12px] font-bold text-muted">{label}</span>
-      <div role="group" aria-label={label} className="flex gap-0.5 rounded-[19px] bg-tile p-[3px]">
+    <div className="flex flex-col gap-1.5">
+      <div role="group" aria-label="Що фарбувати" className="flex gap-0.5 rounded-[19px] bg-tile p-[3px]">
+        {COLOR_MODES.map((m) => {
+          const on = m.value === mode
+          const mark = m.value === 'background-color' && own['background-color']
+          return (
+            <button
+              key={m.value}
+              type="button"
+              aria-pressed={on}
+              onClick={() => setMode(m.value)}
+              className={cn('flex h-[34px] flex-1 items-center justify-center gap-2 rounded-2xl text-[14px] font-bold', on ? 'bg-paper text-ink' : 'text-white hover:bg-steel')}
+            >
+              {/* Іконка показує поточний колір: літера — кольором тексту, підкладка — маркером */}
+              <span
+                className={cn('grid h-[22px] w-[22px] place-items-center rounded-[7px]', mark && 'text-ink')}
+                style={m.value === 'color' ? { color: own.color || undefined } : mark ? { background: onPaper(mark) } : { boxShadow: 'inset 0 0 0 1.5px currentColor' }}
+              >
+                <Icon name="type" size={14} strokeWidth={2.6} />
+              </span>
+              {m.label}
+            </button>
+          )
+        })}
+      </div>
+      <div role="group" aria-label={mode === 'color' ? 'Колір тексту' : 'Колір маркера'} className="flex gap-0.5 rounded-[19px] bg-tile p-[3px]">
         <button
           type="button"
           aria-label="Без кольору"
           data-tip="Без кольору"
           aria-pressed={!value}
-          onClick={() => onPick('')}
+          onClick={() => onStyle(mode, '')}
           className={cn('grid h-[34px] flex-1 place-items-center rounded-2xl', !value ? 'bg-paper text-ink' : 'text-white hover:bg-steel')}
         >
           <Icon name="x" size={15} strokeWidth={2.6} />
@@ -1226,11 +1260,10 @@ function Swatches({ label, options, value, onPick }: { label: string; options: {
             aria-label={o.label}
             data-tip={o.label}
             aria-pressed={o.value === value}
-            onClick={() => onPick(o.value)}
+            onClick={() => onStyle(mode, o.value)}
             className={cn('grid h-[34px] flex-1 place-items-center rounded-2xl', o.value === value ? 'bg-paper' : 'hover:bg-steel')}
           >
-            {/* Маркер напівпрозорий — показуємо, яким він буде на папері нотатки */}
-            <span className="note-swatch" style={{ background: `linear-gradient(${o.value}, ${o.value}), var(--color-paper)` }} />
+            <span className="note-swatch" style={{ background: onPaper(o.value) }} />
           </button>
         ))}
       </div>
@@ -1320,8 +1353,7 @@ function FormatBar({ range, own, onStyle }: { range: Range; own: Record<StylePro
           ))}
         </div>
       </div>
-      <Swatches label="Колір тексту" options={TEXT_COLORS} value={own.color} onPick={(v) => onStyle('color', v)} />
-      <Swatches label="Маркер" options={MARKS} value={own['background-color']} onPick={(v) => onStyle('background-color', v)} />
+      <ColorPicker own={own} onStyle={onStyle} />
     </div>
   )
 }
