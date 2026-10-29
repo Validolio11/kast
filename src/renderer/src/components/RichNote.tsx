@@ -1282,13 +1282,54 @@ function FormatBar({ range, own, onStyle }: { range: Range; own: Record<StylePro
   const fonts = FONTS.filter((f) => f.toLowerCase().includes(q.trim().toLowerCase()))
   const size = (d: number) => onStyle('font-size', `${Math.max(8, Math.min(96, cur.size + d))}px`)
   const weight = WEIGHTS.reduce((a, b) => (Math.abs(b.value - cur.weight) < Math.abs(a.value - cur.weight) ? b : a)).value
+  const list = useRef<HTMLDivElement>(null)
+  const search = useRef<HTMLInputElement>(null)
+  /** Шрифт до відкриття списку: Esc повертає його після перегляду стрілками */
+  const original = useRef<string | null>(null)
 
   useEffect(() => setQ(''), [open])
+  // Вибраний шрифт завжди видно в списку (гортаємо лише список, не сторінку — інакше меню закриється)
+  useEffect(() => {
+    const box = list.current
+    const item = box?.querySelector<HTMLElement>('[aria-selected=true]')
+    if (!box || !item) return
+    if (item.offsetTop < box.scrollTop) box.scrollTop = item.offsetTop
+    else if (item.offsetTop + item.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = item.offsetTop + item.offsetHeight - box.clientHeight
+  }, [open, cur.font, q])
+
+  const toggle = () => {
+    if (!open) original.current = own['font-family']
+    setOpen((o) => !o)
+  }
+  /** Стрілки: наступний / попередній шрифт одразу застосовується до тексту — видно наживо */
+  const onListKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!fonts.length) return
+      const i = fonts.indexOf(cur.font)
+      const next = i < 0 ? (e.key === 'ArrowDown' ? 0 : fonts.length - 1) : Math.max(0, Math.min(fonts.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
+      if (next === i) return
+      onStyle('font-family', fontStack(fonts[next]))
+      // Застосування стилю ставить виділення в текст і забирає фокус — повертаємо його в поле, щоб гортати далі
+      search.current?.focus({ preventScroll: true })
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      // Набрали назву без стрілок — Enter бере перший збіг
+      if (fonts.length && !fonts.includes(cur.font)) onStyle('font-family', fontStack(fonts[0]))
+      setOpen(false)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      if (original.current !== null && own['font-family'] !== original.current) onStyle('font-family', original.current)
+      setOpen(false)
+    }
+  }
 
   return (
     <div className="relative flex flex-col gap-1.5">
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
         aria-expanded={open}
         aria-label="Шрифт"
         className="flex h-10 items-center justify-between gap-2 rounded-[19px] bg-tile pr-3 pl-4 text-[15px] font-semibold"
@@ -1303,11 +1344,14 @@ function FormatBar({ range, own, onStyle }: { range: Range; own: Record<StylePro
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            ref={search}
+            onKeyDown={onListKey}
+            data-own-escape
             placeholder="Пошук шрифту"
-            aria-label="Пошук шрифту"
-            className="h-9 rounded-[14px] bg-canvas px-3 text-[14px] font-semibold text-white caret-growth outline-none placeholder:text-muted"
+            aria-label="Пошук шрифту, стрілки — переглянути наживо"
+            className="h-9 rounded-[12px] bg-canvas px-3 text-[14px] font-semibold text-white caret-growth outline-none placeholder:text-muted"
           />
-          <div role="listbox" aria-label="Шрифти" className="flex h-[236px] flex-col gap-0.5 overflow-y-auto overscroll-contain">
+          <div ref={list} role="listbox" aria-label="Шрифти" className="relative flex h-[236px] flex-col gap-0.5 overflow-y-auto overscroll-contain">
             {fonts.map((f) => (
               <button
                 key={f}

@@ -863,7 +863,7 @@ export function ContextMenu({
       if (!ref.current?.contains(e.target as Node)) onClose()
     }
     const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !(e.target as HTMLElement | null)?.closest?.('[data-own-escape]')) {
         e.preventDefault()
         onClose()
       }
