@@ -261,6 +261,13 @@
     color: var(--color-dim);
     pointer-events: none;
   }
+  /* Емодзі-іконки нотаток: кольорові гліфи системи, без підрядкового простору */
+  .note-emoji {
+    display: inline-block;
+    font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+    line-height: 1;
+    transform: translateY(var(--emoji-shift, 0));
+  }
   /* Палітра кольору тексту й маркера в нотатках (контраст тексту на paper ≥ 4.5:1) */
   :root {
     --note-c-red: #c8282b;

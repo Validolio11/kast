@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, CaptureField, cn, ContextMenu, InfoRow, Icon, PulseChip, RoundButton, useToast } from '@/design-system'
 import { Page } from '@/components/Page'
 import { useNotes } from '@/data/hooks'
+import { EmojiPicker } from '@/components/EmojiPicker'
 import { createNote, notePreview, noteTitle, removeNote, updateNote } from '@/data/notes'
 import { captureToInbox } from '@/data/tasks'
 import { RichNote, type RichNoteHandle } from '@/components/RichNote'
@@ -108,6 +109,11 @@ function NoteTile({ note, selected, onClick }: { note: Note; selected: boolean; 
         selected ? 'bg-steel' : 'bg-tile hover:bg-[#2a2a2c]',
       )}
     >
+      {note.icon && (
+        <span aria-hidden className="note-tile-icon note-emoji shrink-0 text-[28px]">
+          {note.icon}
+        </span>
+      )}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[16px] font-extrabold text-white">{noteTitle(note.body)}</span>
         <span className="mt-1 block truncate text-[13px] font-semibold text-muted">{notePreview(note.body) || age(note.updatedAt)}</span>
@@ -261,6 +267,8 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
           Змінено {age(note.updatedAt)}, {fmtTime(note.updatedAt)}
         </span>
       </div>
+      <div className="mt-5 flex items-center gap-3 max-[640px]:gap-2">
+      <EmojiPicker value={note.icon} disabled={locked} onChange={(icon) => updateNote(note.id, { icon })} />
       <input
         ref={titleRef}
         value={title}
@@ -279,8 +287,9 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
         }}
         onBlur={flush}
         placeholder="Заголовок"
-        className="mt-5 w-full bg-transparent text-[44px] leading-[0.95] font-extrabold tracking-[-0.04em] text-ink outline-none placeholder:text-dim max-[640px]:text-[32px]"
+        className="min-w-0 flex-1 bg-transparent text-[44px] leading-[0.95] font-extrabold tracking-[-0.04em] text-ink outline-none placeholder:text-dim max-[640px]:text-[32px]"
       />
+      </div>
       <div className="mt-6 flex min-h-0 flex-1 flex-col">
         <RichNote
           key={page}
