@@ -261,6 +261,11 @@
     color: var(--color-dim);
     pointer-events: none;
   }
+  /* Шматки, додані з Ctrl, — той самий колір, що й виділення */
+  ::highlight(kast-multi) {
+    background-color: var(--color-growth);
+    color: var(--color-ink);
+  }
   .note-editor ::selection {
     background: var(--color-growth);
     color: var(--color-ink);

@@ -69,6 +69,21 @@ export const RichNote = forwardRef<RichNoteHandle, {
   imageOwner?: string
 }>(function RichNote({ html, placeholder, onChange, onLineToTask, readOnly, imageOwner }, ref) {
   const editor = useRef<HTMLDivElement>(null)
+  /** Шматки, додані з Ctrl: стиль із меню застосовується до всіх разом */
+  const extra = useRef<Range[]>([])
+  /** Підсвітка доданих шматків (CSS Highlight API): справжнє виділення в браузері лише одне */
+  const paintExtra = () => {
+    const reg = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights
+    const H = (window as unknown as { Highlight?: new (...r: Range[]) => unknown }).Highlight
+    if (!reg || !H) return
+    if (extra.current.length) reg.set('kast-multi', new H(...extra.current))
+    else reg.delete('kast-multi')
+  }
+  const clearExtra = () => {
+    if (!extra.current.length) return
+    extra.current = []
+    paintExtra()
+  }
   const lastHtml = useRef<string | null>(null)
   const lastRange = useRef<Range | null>(null)
   const [empty, setEmpty] = useState(false)
@@ -295,6 +310,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
   }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape' && extra.current.length) return clearExtra()
     const handle = (e.target as HTMLElement).closest('.note-media-drag')
     if (handle && !readOnly && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault()
@@ -641,19 +657,33 @@ export const RichNote = forwardRef<RichNoteHandle, {
     }
   }
 
-  const hasText = !!menu?.range && !menu.range.collapsed && !!menu.range.toString().trim()
+  const hasText = (!!menu?.range && !menu.range.collapsed && !!menu.range.toString().trim()) || extra.current.length > 0
+
+  /** Усі виділені шматки: додані з Ctrl і поточне виділення */
+  const allRanges = () =>
+    [...extra.current, ...(menu?.range && !menu.range.collapsed ? [menu.range] : [])].filter((x) => !x.collapsed && x.toString().trim())
 
   const restyle = (prop: 'font-family' | 'font-size' | 'font-weight', value: string) => {
-    if (!menu?.range || menu.range.collapsed) return
-    const next = applyStyle(el(), menu.range, prop, value)
-    select(next)
-    setMenu({ ...menu, range: next.cloneRange() })
+    const ranges = allRanges()
+    if (!ranges.length) return
+    // Діапазони «живі»: після зміни одного решта підлаштовуються під новий DOM
+    const results = ranges.map((x) => applyStyle(el(), x, prop, value))
+    const last = results[results.length - 1]
+    extra.current = results.slice(0, -1)
+    paintExtra()
+    select(last)
+    setMenu((m) => (m ? { ...m, range: last.cloneRange() } : m))
     emit()
   }
 
   const copyItem: MenuAction = menu?.chip
     ? { label: menu.chip.classList.contains('note-link') ? 'Копіювати посилання' : 'Копіювати', icon: 'copy', onSelect: () => (copy(chipText(menu.chip!)), close()) }
-    : { label: 'Копіювати', icon: 'copy', disabled: !hasText, onSelect: () => (copy(plainText(el(), menu!.range!)), close()) }
+    : {
+        label: 'Копіювати',
+        icon: 'copy',
+        disabled: !hasText,
+        onSelect: () => (copy(allRanges().map((x) => plainText(el(), x)).join('\n')), clearExtra(), close()),
+      }
 
   // Заблокована нотатка: з меню лишається тільки копіювання
   const isLink = !!menu?.chip?.classList.contains('note-link')
@@ -815,8 +845,11 @@ export const RichNote = forwardRef<RichNoteHandle, {
           onSelect: () => {
             const before = snapshot()
             el().focus()
-            select(menu!.range!)
-            document.execCommand('delete')
+            for (const x of allRanges()) {
+              select(x)
+              document.execCommand('delete')
+            }
+            clearExtra()
             close()
             done('Видалено', before)
           },
@@ -860,7 +893,21 @@ export const RichNote = forwardRef<RichNoteHandle, {
           data-media-moving={mediaMoving || undefined}
           data-placeholder={placeholder}
           data-empty={(empty && !readOnly) || undefined}
-          onInput={emit}
+          onInput={() => {
+            clearExtra()
+            emit()
+          }}
+          onMouseDown={(e) => {
+            if (e.button !== 0) return
+            // Ctrl + виділення додає ще один шматок (як у Word); звичайний клік — починає наново
+            if (e.ctrlKey || e.metaKey) {
+              const sel = getSelection()
+              if (sel?.rangeCount && !sel.isCollapsed && el().contains(sel.getRangeAt(0).commonAncestorContainer)) {
+                extra.current = [...extra.current, sel.getRangeAt(0).cloneRange()]
+                paintExtra()
+              }
+            } else clearExtra()
+          }}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onCopy={onCopy}
