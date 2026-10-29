@@ -22,16 +22,26 @@ export type Styles = Partial<Record<StyleProp, string>>
 
 /** Кольори тексту й маркера — лише з палітри (CSS-змінні в index.css), тож вставлений з інтернету колір не прилипне */
 export const TEXT_COLORS = [
-  { value: 'var(--note-c-green)', label: 'Зелений' },
-  { value: 'var(--note-c-violet)', label: 'Фіолетовий' },
   { value: 'var(--note-c-red)', label: 'Червоний' },
+  { value: 'var(--note-c-orange)', label: 'Помаранчевий' },
+  { value: 'var(--note-c-brown)', label: 'Коричневий' },
+  { value: 'var(--note-c-green)', label: 'Зелений' },
+  { value: 'var(--note-c-teal)', label: 'Бірюзовий' },
+  { value: 'var(--note-c-blue)', label: 'Синій' },
+  { value: 'var(--note-c-violet)', label: 'Фіолетовий' },
+  { value: 'var(--note-c-pink)', label: 'Рожевий' },
   { value: 'var(--note-c-grey)', label: 'Сірий' },
 ]
 export const MARKS = [
-  { value: 'var(--note-m-green)', label: 'Зелений маркер' },
-  { value: 'var(--note-m-yellow)', label: 'Жовтий маркер' },
-  { value: 'var(--note-m-violet)', label: 'Фіолетовий маркер' },
-  { value: 'var(--note-m-red)', label: 'Червоний маркер' },
+  { value: 'var(--note-m-red)', label: 'Червоний' },
+  { value: 'var(--note-m-orange)', label: 'Помаранчевий' },
+  { value: 'var(--note-m-yellow)', label: 'Жовтий' },
+  { value: 'var(--note-m-green)', label: 'Зелений' },
+  { value: 'var(--note-m-teal)', label: 'Бірюзовий' },
+  { value: 'var(--note-m-blue)', label: 'Синій' },
+  { value: 'var(--note-m-violet)', label: 'Фіолетовий' },
+  { value: 'var(--note-m-pink)', label: 'Рожевий' },
+  { value: 'var(--note-m-grey)', label: 'Сірий' },
 ]
 const PALETTE_RE = /^var\(--note-[cm]-[a-z]+\)$/
 const COLOR_PROPS: StyleProp[] = ['color', 'background-color']

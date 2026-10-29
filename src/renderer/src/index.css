@@ -263,14 +263,24 @@
   }
   /* Палітра кольору тексту й маркера в нотатках (контраст тексту на paper ≥ 4.5:1) */
   :root {
-    --note-c-green: #087a44;
-    --note-c-violet: #6408fa;
     --note-c-red: #c8282b;
+    --note-c-orange: #b45309;
+    --note-c-brown: #8a5a2b;
+    --note-c-green: #087a44;
+    --note-c-teal: #0b7285;
+    --note-c-blue: #1d5fd1;
+    --note-c-violet: #6408fa;
+    --note-c-pink: #c2185b;
     --note-c-grey: #6e6e73;
-    --note-m-green: rgb(19 242 135 / 0.45);
-    --note-m-yellow: rgb(255 214 10 / 0.6);
-    --note-m-violet: rgb(132 66 255 / 0.25);
     --note-m-red: rgb(255 77 79 / 0.3);
+    --note-m-orange: rgb(255 146 43 / 0.38);
+    --note-m-yellow: rgb(255 214 10 / 0.6);
+    --note-m-green: rgb(19 242 135 / 0.45);
+    --note-m-teal: rgb(32 201 201 / 0.32);
+    --note-m-blue: rgb(77 148 255 / 0.3);
+    --note-m-violet: rgb(132 66 255 / 0.25);
+    --note-m-pink: rgb(255 92 168 / 0.28);
+    --note-m-grey: rgb(142 142 147 / 0.3);
   }
   .note-editor span[style*='--note-m-'] {
     border-radius: 4px;
@@ -278,10 +288,10 @@
     box-decoration-break: clone;
   }
   .note-swatch {
-    width: 18px;
-    height: 18px;
-    border-radius: 9px;
-    box-shadow: 0 0 0 2px var(--color-paper);
+    width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    box-shadow: 0 0 0 1.5px var(--color-paper);
   }
   /* Пензлик формату: курсор-пензлик над текстом */
   .note-editor[data-painting] {
