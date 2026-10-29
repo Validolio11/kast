@@ -4,7 +4,7 @@ import { Page } from '@/components/Page'
 import { TaskRow } from '@/components/TaskRow'
 import { WeeklyReview } from '@/flows/WeeklyReview'
 import { useStatus } from '@/data/hooks'
-import { captureToInbox, remove, reviewCandidates, STALE_DAYS, takeToToday, toInbox, toSomeday, update } from '@/data/tasks'
+import { captureToInbox, remove, repeatNext, reviewCandidates, STALE_DAYS, takeToToday, toInbox, toSomeday, update } from '@/data/tasks'
 import type { Task } from '@/data/db'
 import { age, pluralWord } from '@/lib/time'
 import { prettyHotkey } from '@/lib/hooks'
@@ -24,6 +24,8 @@ export function Inbox({
   const loaded = useStatus('inbox')
   const inbox = loaded ?? []
   const someday = useStatus('someday') ?? []
+  // Повтори, що чекають свого дня: видно, коли кожен повернеться
+  const repeats = [...(useStatus('scheduled') ?? [])].sort((a, b) => (a.planDate ?? '').localeCompare(b.planDate ?? ''))
 
   useEffect(() => {
     reviewCandidates().then(setReview)
@@ -100,6 +102,21 @@ export function Inbox({
                   />
                 ))}
               </ListSection>
+          )}
+
+          {repeats.length > 0 && (
+            <ListSection title="Повтори" count={repeats.length} collapsible defaultOpen={false}>
+              {repeats.map((t) => (
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  onOpen={onOpen}
+                  muted
+                  meta={t.planDate ? <span>{repeatNext(t.planDate)}</span> : undefined}
+                  actions={<RowAction icon="sun" label="Зробити сьогодні" onClick={() => take(t.id)} />}
+                />
+              ))}
+            </ListSection>
           )}
 
           {someday.length > 0 && (

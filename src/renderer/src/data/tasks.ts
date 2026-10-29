@@ -1,4 +1,4 @@
-import { addDays, DAY, dayKey, now } from '@/lib/time'
+import { addDays, DAY, dayKey, now, pluralWord } from '@/lib/time'
 import { db, getMeta, type Day, type Task, type TaskKind, type When } from './db'
 
 /** Ліміти дня: вибір із ≤3 головних не перевантажує (метод Айві Лі / 1-3-5) */
@@ -8,6 +8,11 @@ export const SMALL_LIMIT = 5
 export const STALE_DAYS = 14
 
 export const WHEN_ORDER: Record<When, number> = { morning: 0, afternoon: 1, evening: 2, any: 3 }
+
+/** Найдовший повтор у конструкторі */
+export const REPEAT_MAX = 90
+/** «Щодня» / «Кожні 5 днів» */
+export const repeatLabel = (n: number) => (n === 1 ? 'Щодня' : `Кожні ${n} ${pluralWord(n, ['день', 'дні', 'днів'])}`)
 
 const uid = () => crypto.randomUUID()
 
@@ -135,13 +140,84 @@ export async function complete(id: string, done: boolean): Promise<Placement | u
   const t = await db.tasks.get(id)
   if (!t) return
   if (done) {
+    if (t.repeat && t.status !== 'done') return completeRepeat(t)
     await update(id, { status: 'done', doneAt: now(), planDate: dayKey() })
     return
+  }
+  // Зняли галочку із запису про виконання повтору — повертаємо саму задачу, без дубля
+  if (t.repeatOf) {
+    const orig = await db.tasks.get(t.repeatOf)
+    if (orig && !orig.deleted && orig.status === 'scheduled') {
+      await update(id, { deleted: 1 })
+      const p = await placement(dayKey(), orig.kind)
+      if (p === 'inbox') await update(orig.id, { status: 'inbox', planDate: null, inboxAt: now(), staleAt: null })
+      else await update(orig.id, { status: 'today', kind: p, planDate: dayKey(), order: now() })
+      return p
+    }
   }
   const p = await placement(dayKey(), t.kind)
   if (p === 'inbox') await update(id, { status: 'inbox', doneAt: null, planDate: null, inboxAt: now() })
   else await update(id, { status: 'today', kind: p, doneAt: null, planDate: dayKey() })
   return p
+}
+
+/** Задати повтор (днів) або прибрати його. Задача, що чекала свого дня, без повтору повертається у Вхідні. */
+export async function setRepeat(id: string, days: number | undefined) {
+  const t = await db.tasks.get(id)
+  if (!t) return
+  if (!days && t.status === 'scheduled') await update(id, { repeat: undefined, status: 'inbox', planDate: null, inboxAt: now(), staleAt: null })
+  else await update(id, { repeat: days ? Math.max(1, Math.min(REPEAT_MAX, Math.round(days))) : undefined })
+}
+
+/** Коли повтор повернеться: «завтра», «через 3 дні» або дата */
+export function repeatNext(planDate: string, today = dayKey()) {
+  const days = Math.round((new Date(planDate).getTime() - new Date(today).getTime()) / DAY)
+  if (days <= 0) return 'сьогодні'
+  if (days === 1) return 'завтра'
+  if (days < 7) return `через ${days} ${pluralWord(days, ['день', 'дні', 'днів'])}`
+  return new Intl.DateTimeFormat('uk', { day: 'numeric', month: 'long' }).format(new Date(`${planDate}T00:00`))
+}
+
+/**
+ * Повтор виконано: у «Зроблено» лягає окремий запис (історія й прогрес дня), а сама задача
+ * ховається до дня «сьогодні + repeat» і тоді сама повертається на «Сьогодні».
+ */
+async function completeRepeat(t: Task) {
+  const today = dayKey()
+  await db.transaction('rw', db.tasks, async () => {
+    await db.tasks.add(
+      newTask(t.title, {
+        status: 'done',
+        kind: t.kind,
+        when: t.when,
+        notes: t.notes,
+        notesHtml: t.notesHtml,
+        planDate: today,
+        doneAt: now(),
+        inboxAt: t.inboxAt,
+        createdAt: t.createdAt,
+        repeatOf: t.id,
+      }),
+    )
+    await update(t.id, { status: 'scheduled', planDate: addDays(today, t.repeat!), doneAt: null, stepsDone: 0, order: now() })
+  })
+  return undefined
+}
+
+/**
+ * Настав день повтору: задача повертається на «Сьогодні» в межах ліміту 3 + 5, а якщо день повний — у Вхідні.
+ * Пропущені дні не множать копій: задача одна, вона просто повертається.
+ */
+export async function activateRepeats(date = dayKey()) {
+  const due = (await db.tasks.where('status').equals('scheduled').toArray())
+    .filter((t) => !t.deleted && t.planDate && t.planDate <= date)
+    .sort((a, b) => (a.kind === b.kind ? (a.planDate ?? '').localeCompare(b.planDate ?? '') : a.kind === 'main' ? -1 : 1))
+  for (const t of due) {
+    const p = await placement(date, t.kind)
+    if (p === 'inbox') await update(t.id, { status: 'inbox', planDate: null, inboxAt: now(), staleAt: null })
+    else await update(t.id, { status: 'today', kind: p, planDate: date, order: now() })
+  }
+  return due.length
 }
 
 export const toInbox = (id: string) => update(id, { status: 'inbox', planDate: null, inboxAt: now(), staleAt: null })
@@ -160,12 +236,16 @@ async function patchDay(date: string, patch: Partial<Day>) {
 export const markPlanned = () => patchDay(dayKey(), { plannedAt: now() })
 
 /**
- * Новий день: незакриті задачі з минулих днів не зникають у нікуди, а повертаються у Вхідні.
+ * Новий день: незакриті задачі з минулих днів не зникають у нікуди, а повертаються у Вхідні
+ * (повторювані лишаються на сьогодні — це їхній ритм).
  * Стара planDate лишається позначкою «не завершено раніше» — за нею їх показує «План на день».
  */
 export async function rolloverLeftovers(date = dayKey()) {
   const stale = (await db.tasks.where('planDate').below(date).toArray()).filter((t) => !t.deleted && t.status === 'today')
-  for (const t of stale) await update(t.id, { status: 'inbox', inboxAt: now(), staleAt: null })
+  for (const t of stale) {
+    if (t.repeat) await update(t.id, { planDate: date })
+    else await update(t.id, { status: 'inbox', inboxAt: now(), staleAt: null })
+  }
   return stale.length
 }
 

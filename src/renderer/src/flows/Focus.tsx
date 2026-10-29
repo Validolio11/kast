@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, Card, CheckCircle, cn, ContextMenu, Icon, PageGrid, PulseChip, RoundButton, SegTabs, useToast, type MenuAction } from '@/design-system'
+import { Button, Card, CheckCircle, cn, ContextMenu, Icon, PageGrid, PulseChip, RoundButton, SegTabs, Stepper, useToast, type MenuAction } from '@/design-system'
 import { WHEN_OPTIONS } from '@/components/TaskRow'
 import { useEntering } from '@/components/Page'
 import { useTask } from '@/data/hooks'
-import { addSteps, captureToInbox, complete, finishStep, remove, setKind, setSteps, takeToToday, toInbox, update } from '@/data/tasks'
+import { addSteps, captureToInbox, complete, finishStep, remove, REPEAT_MAX, repeatLabel, repeatNext, setKind, setRepeat, setSteps, takeToToday, toInbox, update } from '@/data/tasks'
 import type { Task, TaskKind, TaskStatus, When } from '@/data/db'
 import { pluralWord } from '@/lib/time'
 import { RichNote, type RichNoteHandle } from '@/components/RichNote'
@@ -16,7 +16,7 @@ const KIND_OPTIONS: { value: TaskKind; label: string }[] = [
 ]
 // Без іконок: чотири варіанти вміщаються в колонку 400px одним рядком
 const WHEN_FOCUS: { value: When; label: string }[] = [{ value: 'any', label: 'Будь-коли' }, ...WHEN_OPTIONS.slice(1).map(({ value, label }) => ({ value, label }))]
-const STATUS_LABEL: Record<TaskStatus, string> = { today: 'Сьогодні', inbox: 'Вхідні', someday: 'Колись', done: 'Готово', dropped: 'Відпущено' }
+const STATUS_LABEL: Record<TaskStatus, string> = { today: 'Сьогодні', inbox: 'Вхідні', someday: 'Колись', done: 'Готово', dropped: 'Відпущено', scheduled: 'Повтор' }
 
 /** Режим фокусу: на екрані лише одна задача */
 export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
@@ -109,6 +109,7 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
                     </Button>
                   )
                 )}
+                {!done && <RepeatGroup task={task} />}
                 <div className="flex flex-wrap gap-2">
                   <Button variant={done ? 'steel' : 'pulse'} size="lg" iconLeft={done ? 'undo' : 'check'} onClick={finish}>
                     {done ? 'Повернути в роботу' : 'Готово'}
@@ -378,6 +379,48 @@ function StepCard({ task }: { task: Task }) {
         <ContextMenu x={menu.x} y={menu.y} label={`Крок ${menu.i + 1}`} items={menuItems(menu.i)} onClose={() => setMenu(null)} />
       )}
     </Card>
+  )
+}
+
+const REPEAT_OPTIONS: { value: 'off' | 'daily' | 'every'; label: string }[] = [
+  { value: 'off', label: 'Ні' },
+  { value: 'daily', label: 'Щодня' },
+  { value: 'every', label: 'Кожні N днів' },
+]
+
+/**
+ * Конструктор повтору: не повторювати, щодня або кожні N днів. Після виконання задача ховається
+ * і сама повертається на «Сьогодні» через N днів — без копій і без провини за пропущені дні.
+ */
+function RepeatGroup({ task }: { task: Task }) {
+  const toast = useToast()
+  const n = task.repeat ?? 0
+  const mode = !n ? 'off' : n === 1 ? 'daily' : 'every'
+  return (
+    <Group label="Повтор">
+      <SegTabs
+        compact
+        label="Повтор"
+        surface="canvas"
+        value={mode}
+        options={REPEAT_OPTIONS}
+        onChange={async (m) => {
+          const days = m === 'off' ? undefined : m === 'daily' ? 1 : n > 1 ? n : 5
+          await setRepeat(task.id, days)
+          if (days) toast({ title: repeatLabel(days), text: 'Після виконання задача повернеться сама' })
+        }}
+      />
+      {mode === 'every' && (
+        <div className="flex items-center gap-3">
+          <span className="text-[14px] font-bold text-soft">Кожні</span>
+          <Stepper size="sm" label="Кожні скільки днів" value={n} min={2} max={REPEAT_MAX} onChange={(v) => setRepeat(task.id, v)} />
+          <span className="text-[14px] font-bold text-soft">{pluralWord(n, ['день', 'дні', 'днів'])}</span>
+        </div>
+      )}
+      {task.status === 'scheduled' && task.planDate && (
+        <span className="text-[13px] font-semibold text-muted">Повернеться {repeatNext(task.planDate)}</span>
+      )}
+    </Group>
   )
 }
 

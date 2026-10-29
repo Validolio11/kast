@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 
-export type TaskStatus = 'inbox' | 'today' | 'someday' | 'done' | 'dropped'
+/** scheduled — повторювана задача чекає свого дня (planDate), до того її не видно в «Сьогодні» */
+export type TaskStatus = 'inbox' | 'today' | 'someday' | 'done' | 'dropped' | 'scheduled'
 export type TaskKind = 'main' | 'small'
 /** Намір реалізації: коли саме я це зроблю */
 export type When = 'any' | 'morning' | 'afternoon' | 'evening'
@@ -26,6 +27,10 @@ export interface Task extends Syncable {
   notesHtml?: string
   /** Скільки кроків уже зроблено в цій задачі */
   stepsDone?: number
+  /** Повтор: через скільки днів після виконання задача повертається (1 — щодня); немає — не повторюється */
+  repeat?: number
+  /** Запис про виконання повторюваної задачі: id самої задачі (щоб зняття галочки повернуло її, а не дублювало) */
+  repeatOf?: string
   /** Черга кроків після поточного: на екрані їх не видно, наступний піднімається, коли поточний зроблено */
   nextSteps?: string[]
   order: number

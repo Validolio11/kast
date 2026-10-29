@@ -80,6 +80,7 @@ const paths = {
   alignLeft: (<><path d="M21 6H3" /><path d="M15 12H3" /><path d="M17 18H3" /></>),
   alignCenter: (<><path d="M21 6H3" /><path d="M17 12H7" /><path d="M19 18H5" /></>),
   alignRight: (<><path d="M21 6H3" /><path d="M21 12H9" /><path d="M21 18H7" /></>),
+  repeat: (<><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></>),
   image: (<><rect width="18" height="18" x="3" y="3" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></>),
   wrapLeft: (<><rect x="3" y="4" width="8" height="9" rx="1.5" /><path d="M15 5h6M15 9h6M15 13h6M3 17h18M3 21h14" /></>),
   wrapRight: (<><rect x="13" y="4" width="8" height="9" rx="1.5" /><path d="M3 5h6M3 9h6M3 13h6M3 17h18M3 21h14" /></>),

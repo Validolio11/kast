@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppHeader, RoundButton, SyncDot, ToastProvider, UpdatePill, useToast, WindowControls, type NavTab } from '@/design-system'
 import { useDay, useStatus, useToday } from '@/data/hooks'
-import { rolloverLeftovers, sweepStale } from '@/data/tasks'
+import { activateRepeats, rolloverLeftovers, sweepStale } from '@/data/tasks'
 import { markLegacyQuickNote } from '@/data/notes'
 import { CloseDay } from '@/flows/CloseDay'
 import { Focus } from '@/flows/Focus'
@@ -53,7 +53,8 @@ function Shell() {
 
   // Новий день (при старті й опівночі): незакрите з минулих днів повертається у Вхідні
   useEffect(() => {
-    rolloverLeftovers(date)
+    // Спершу незакрите з минулих днів, потім повтори, що настали, — так ліміт дня рахується чесно
+    rolloverLeftovers(date).then(() => activateRepeats(date))
   }, [date])
 
   // Тихе старіння Вхідних: при старті й щогодини
