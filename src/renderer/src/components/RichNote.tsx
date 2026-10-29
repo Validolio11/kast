@@ -7,6 +7,7 @@ import { addImages, downloadImage } from '@/data/files'
 import { VideoViewer, Viewer } from './Attachments'
 import { adjacentMediaPoint, MEDIA_DRAG_TYPE, mediaDropPoint, moveMedia, type MediaDropPoint } from './mediaMove'
 import './noteMedia.css'
+import './noteLists.css'
 import {
   alignBlocks,
   alignOf,
@@ -227,12 +228,13 @@ export const RichNote = forwardRef<RichNoteHandle, {
 
   /* ───────── Рядок → задача ───────── */
   const convert = async (block: HTMLElement | null, addLine: boolean) => {
-    if (!block) return
+    if (!block || readOnly) return
     const raw = block.textContent ?? ''
     if (raw.startsWith(SENT_MARK)) return
     const title = raw.replace(TASK_LINE, '').replace(/^[-•*]\s+/, '').replace(/^\d+\.\s/, '').trim()
     if (!title) return
     await onLineToTask(title)
+    block.removeAttribute('data-list')
     block.textContent = SENT_MARK + title
     if (addLine) {
       const next = document.createElement('div')
@@ -249,7 +251,9 @@ export const RichNote = forwardRef<RichNoteHandle, {
 
   const currentBlock = () => {
     const sel = getSelection()
-    return sel?.anchorNode && el().contains(sel.anchorNode) ? blockOf(el(), sel.anchorNode) : null
+    if (!sel?.anchorNode || !el().contains(sel.anchorNode)) return null
+    const node = sel.anchorNode === el() ? el().childNodes[sel.anchorOffset] ?? el().lastChild : sel.anchorNode
+    return blockOf(el(), node)
   }
 
   useImperativeHandle(ref, () => ({
@@ -305,7 +309,9 @@ export const RichNote = forwardRef<RichNoteHandle, {
       openMenu(rect?.left ?? 0, rect?.bottom ?? 0, null)
       return
     }
-    if (readOnly) return
+    if (readOnly || e.nativeEvent.isComposing) return
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key === ' ' && listKey(' ')) return e.preventDefault()
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key === 'Backspace' && listKey('Backspace')) return e.preventDefault()
     if (e.key === ' ' && linkifyBeforeCaret(true)) return e.preventDefault()
     if (e.key === 'Enter' && !e.ctrlKey) linkifyBeforeCaret(false)
     // Браузерні Ctrl+B/I/U вставляють <b>/<i>/<u>, які Kast не зберігає. Жирний — нашим стилем, решта вимкнена.
@@ -335,7 +341,76 @@ export const RichNote = forwardRef<RichNoteHandle, {
     if (e.ctrlKey || (TASK_LINE.test(text) && text.replace(TASK_LINE, '').trim() && atEnd)) {
       e.preventDefault()
       convert(block, !e.ctrlKey)
+      return
     }
+    if (!e.metaKey && !e.altKey && listKey('Enter')) e.preventDefault()
+  }
+
+  /** Маркер — властивість рядка: Enter продовжує список, Backspace на початку знімає її. */
+  const listKey = (key: ' ' | 'Enter' | 'Backspace') => {
+    const sel = getSelection()
+    if (!sel?.isCollapsed || !sel.rangeCount || !el().contains(sel.anchorNode)) return false
+    const block = currentBlock()
+    if (!block) return false
+    const caret = sel.getRangeAt(0)
+    // Після focusStart чи виділення всього тексту курсор може стояти між блоками редактора.
+    if (caret.startContainer === el()) {
+      const atEnd = caret.startOffset === el().childNodes.length
+      caret.selectNodeContents(block)
+      caret.collapse(!atEnd)
+    }
+    const before = document.createRange()
+    before.selectNodeContents(block)
+    before.setEnd(caret.startContainer, caret.startOffset)
+    const hasContent = (node: ParentNode) => !!node.textContent?.trim() || !!node.querySelector('.note-chip, .note-img')
+    if (key === ' ') {
+      if (block.dataset.list === 'ol' || !/^1[.)]$/.test(before.toString()) || block.textContent !== before.toString() || block.querySelector('.note-chip, .note-img, div')) return false
+      before.deleteContents()
+      block.dataset.list = 'ol'
+      if (!block.querySelector('br')) block.appendChild(document.createElement('br'))
+      caret.setStart(block, 0)
+    } else {
+      if (block.dataset.list !== 'ol') return false
+      if (key === 'Backspace') {
+        if (before.toString() || before.cloneContents().querySelector('br, .note-chip, .note-img')) return false
+        block.removeAttribute('data-list')
+      } else if (!hasContent(block)) {
+        block.removeAttribute('data-list')
+      } else {
+        const tail = document.createRange()
+        tail.selectNodeContents(block)
+        tail.setStart(caret.startContainer, caret.startOffset)
+        const next = document.createElement('div')
+        next.dataset.list = 'ol'
+        next.style.textAlign = block.style.textAlign
+        next.appendChild(tail.extractContents())
+        if (!hasContent(next) && !next.querySelector('br')) {
+          let empty: HTMLElement = next
+          while (empty.lastElementChild?.tagName === 'SPAN' && (empty.lastElementChild as HTMLElement).contentEditable !== 'false') empty = empty.lastElementChild as HTMLElement
+          empty.appendChild(document.createElement('br'))
+        }
+        if (!hasContent(block) && !block.querySelector('br')) block.appendChild(document.createElement('br'))
+        block.after(next)
+        // Курсор лишається всередині успадкованого стилю, а не перед порожнім спаном.
+        let start: Node = next
+        while (start.firstChild && (start.firstChild.nodeType === Node.TEXT_NODE || (start.firstChild instanceof HTMLElement && start.firstChild.tagName === 'SPAN' && start.firstChild.contentEditable !== 'false'))) start = start.firstChild
+        caret.setStart(start, 0)
+      }
+    }
+    caret.collapse(true)
+    select(caret)
+    emit()
+    return true
+  }
+
+  // CSS-номери не потрапляють у Range.toString(), тому копіюємо їх разом із текстом.
+  const onCopy = (e: React.ClipboardEvent) => {
+    const sel = getSelection()
+    if (!sel?.rangeCount || sel.isCollapsed) return
+    const range = sel.getRangeAt(0)
+    if (!el().contains(range.commonAncestorContainer)) return
+    e.preventDefault()
+    e.clipboardData.setData('text/plain', plainText(el(), range))
   }
 
   // Вставляємо лише текст, без чужої розмітки; скріншот — у фото, одне посилання — чипом
@@ -578,7 +653,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
 
   const copyItem: MenuAction = menu?.chip
     ? { label: menu.chip.classList.contains('note-link') ? 'Копіювати посилання' : 'Копіювати', icon: 'copy', onSelect: () => (copy(chipText(menu.chip!)), close()) }
-    : { label: 'Копіювати', icon: 'copy', disabled: !hasText, onSelect: () => (copy(menu!.range!.toString()), close()) }
+    : { label: 'Копіювати', icon: 'copy', disabled: !hasText, onSelect: () => (copy(plainText(el(), menu!.range!)), close()) }
 
   // Заблокована нотатка: з меню лишається тільки копіювання
   const isLink = !!menu?.chip?.classList.contains('note-link')
@@ -788,6 +863,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
           onInput={emit}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
+          onCopy={onCopy}
           onDragStart={onDragStart}
           onDrop={onDrop}
           onClick={onClick}

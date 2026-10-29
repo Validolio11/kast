@@ -17,7 +17,7 @@ export const WEIGHTS = [
 export const BASE_SIZE = 17
 
 const STYLE_PROPS = ['font-family', 'font-size', 'font-weight'] as const
-const NUMBER_PREFIX = /^\d+\.\s/
+const NUMBER_PREFIX = /^\d+[.)]\s/
 
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
@@ -241,9 +241,12 @@ export function sanitize(html: string) {
       if (el.classList.contains('note-chip')) return void to.appendChild(makeChip(el.querySelector('.note-chip-text')?.textContent ?? el.textContent ?? ''))
       if (el.tagName === 'DIV') {
         const div = document.createElement('div')
+        if (el.dataset.list === 'ol') div.dataset.list = 'ol'
         // Вирівнювання рядка: лише по центру чи праворуч (ліворуч — типове)
         if (ALIGNS.includes(el.style.textAlign as Align)) div.style.textAlign = el.style.textAlign
         walk(el, div)
+        // Старі нотатки мали номер у тексті; готові списки повторно не мігруємо.
+        if (!div.dataset.list && stripNumber(div)) div.dataset.list = 'ol'
         return void to.appendChild(div)
       }
       if (el.tagName === 'SPAN' && el.getAttribute('style')) {
@@ -276,27 +279,59 @@ export function blockOf(editor: HTMLElement, node: Node | null): HTMLElement | n
 }
 
 export function blocksIn(editor: HTMLElement, range: Range) {
-  const all = Array.from(editor.children).filter((b) => range.intersectsNode(b)) as HTMLElement[]
+  if (range.collapsed) {
+    const node = range.startContainer === editor ? editor.childNodes[range.startOffset] ?? editor.lastChild : range.startContainer
+    const one = blockOf(editor, node)
+    return one ? [one] : []
+  }
+  const all = Array.from(editor.children).filter((b) => range.intersectsNode(b) && !rangeIn(b, range).collapsed) as HTMLElement[]
   if (all.length) return all
   const one = blockOf(editor, range.startContainer)
   return one ? [one] : []
 }
 
-/** Нумерація абзаців: якщо всі вже пронумеровані — прибрати, інакше пронумерувати 1, 2, 3… */
+/** Номери малює CSS; якщо всі рядки вже в списку — прибрати нумерацію. */
 export function toggleNumbering(blocks: HTMLElement[]) {
-  const all = blocks.every((b) => NUMBER_PREFIX.test(b.textContent ?? ''))
-  blocks.forEach((b, i) => {
-    stripNumber(b)
-    if (!all) b.insertBefore(document.createTextNode(`${i + 1}. `), b.firstChild)
+  const all = blocks.every((b) => b.dataset.list === 'ol')
+  blocks.forEach((b) => {
+    if (all) b.removeAttribute('data-list')
+    else b.dataset.list = 'ol'
   })
   return !all
 }
 
 function stripNumber(block: HTMLElement) {
+  const prefix = (block.textContent ?? '').match(NUMBER_PREFIX)?.[0]
+  if (!prefix) return false
   const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT)
-  const first = walker.nextNode() as Text | null
-  if (first && NUMBER_PREFIX.test(first.data)) first.data = first.data.replace(NUMBER_PREFIX, '')
-  if (first && !first.data && first.parentNode === block) first.remove()
+  const range = document.createRange()
+  range.setStart(block, 0)
+  let left = prefix.length
+  while (walker.nextNode()) {
+    const text = walker.currentNode as Text
+    if (left > text.length) {
+      left -= text.length
+      continue
+    }
+    range.setEnd(text, left)
+    // Текст чипа чи медіа не є набраним маркером списку.
+    if (range.cloneContents().querySelector('.note-chip, .note-img')) return false
+    range.deleteContents()
+    if (!block.textContent && !block.querySelector('br, .note-chip, .note-img')) block.appendChild(document.createElement('br'))
+    return true
+  }
+  return false
+}
+
+/** Частина рядка всередині виділення; межа на початку наступного рядка його не включає. */
+function rangeIn(node: Node, range: Range) {
+  const sub = document.createRange()
+  sub.selectNodeContents(node)
+  if (range.compareBoundaryPoints(Range.START_TO_START, sub) > 0) sub.setStart(range.startContainer, range.startOffset)
+  if (range.compareBoundaryPoints(Range.END_TO_END, sub) < 0) sub.setEnd(range.endContainer, range.endOffset)
+  // Початок текстового вузла і початок його спана — різні DOM-межі без видимого вмісту між ними.
+  if (!sub.toString() && !sub.cloneContents().querySelector('br, .note-chip, .note-img')) sub.collapse(true)
+  return sub
 }
 
 /** Обгортає частину кожного рядка з діапазону в <span> зі стилем; повертає нове виділення */
@@ -352,19 +387,28 @@ function ownSpan(range: Range, block: HTMLElement): HTMLSpanElement | null {
 }
 
 /** Простий текст нотатки: рядок на блок, чип — своїм текстом (innerText ламає рядки на чипах) */
-export function plainText(editor: HTMLElement) {
+export function plainText(editor: HTMLElement, range?: Range) {
   const textOf = (node: Node): string => {
     if (node.nodeType === Node.TEXT_NODE) return (node.textContent ?? '').replace(/\u00a0/g, ' ')
+    if (node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) return Array.from(node.childNodes).map(textOf).join('')
     if (node.nodeType !== Node.ELEMENT_NODE) return ''
     const el = node as HTMLElement
     if (el.classList.contains('note-chip') || el.classList.contains('note-video')) return chipText(el)
     if (el.tagName === 'BR') return ''
     return Array.from(el.childNodes).map(textOf).join('')
   }
-  return Array.from(editor.childNodes)
-    .map(textOf)
-    .join('\n')
-    .replace(/\s+$/, '')
+  let number = 0
+  const lines: string[] = []
+  for (const node of Array.from(editor.childNodes)) {
+    const numbered = node instanceof HTMLElement && node.tagName === 'DIV' && node.dataset.list === 'ol'
+    number = numbered ? number + 1 : 0
+    if (range && (!range.intersectsNode(node) || range.collapsed)) continue
+    const sub = range ? rangeIn(node, range) : null
+    if (sub?.collapsed) continue
+    const text = textOf(sub ? sub.cloneContents() : node)
+    lines.push(numbered ? `${number}. ${text}` : text)
+  }
+  return lines.join('\n').replace(/\s+$/, '')
 }
 
 /** Простий текст збереженої сторінки (без відкритого редактора) */

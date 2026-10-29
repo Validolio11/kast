@@ -1,0 +1,28 @@
+/* Номери існують лише в оформленні; кожна окрема послідовність починається з 1. */
+.note-editor {
+  counter-reset: note-list;
+}
+
+.note-editor > div[data-list='ol'] {
+  position: relative;
+  padding-inline-start: 2.75em;
+  counter-increment: note-list;
+}
+
+.note-editor > :not(div[data-list='ol']) {
+  counter-set: note-list 0;
+}
+
+.note-editor > div[data-list='ol']::before {
+  content: counter(note-list) '.';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: calc(100% - 2.15em);
+  color: var(--color-paper-muted);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
