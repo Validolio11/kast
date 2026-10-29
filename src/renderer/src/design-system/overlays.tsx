@@ -257,10 +257,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const push = useCallback(
     (t: ToastInput) => {
       const id = ++counter.current
-      setItems((l) => [
-        ...l.slice(-3),
-        { ...t, id, kind: t.kind ?? 'success', ms: Math.max(1000, t.ms ?? (t.action ? 6000 : 4000)) },
-      ])
+      // Лише одне сповіщення: нове замінює попереднє, щоб серія дій не перегороджувала екран
+      setItems([{ ...t, id, kind: t.kind ?? 'success', ms: Math.max(1000, t.ms ?? (t.action ? 6000 : 4000)) }])
     },
     [],
   )

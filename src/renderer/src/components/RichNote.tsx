@@ -207,8 +207,10 @@ export const RichNote = forwardRef<RichNoteHandle, {
   }
   const snapshot = () => el().innerHTML
   /** Після дії — коротке сповіщення; для змін тексту — зі «Скасувати» */
-  const done = (title: string, before?: string) => {
+  /** quiet — рутинне форматування: без сповіщення (повторна дія або меню повертають як було) */
+  const done = (title: string, before?: string, quiet = false) => {
     emit()
+    if (quiet) return
     toast(
       before === undefined
         ? { kind: 'info', title }
@@ -321,10 +323,8 @@ export const RichNote = forwardRef<RichNoteHandle, {
       if (e.key.toLowerCase() !== 'b' || !sel?.rangeCount || sel.isCollapsed) return
       const range = sel.getRangeAt(0)
       const bold = styleAt(range).weight >= 700
-      const before = snapshot()
       select(applyStyle(el(), range, 'font-weight', bold ? '500' : '800'))
       emit()
-      toast({ title: bold ? 'Звичайна товщина' : 'Жирний', action: { label: 'Скасувати', onClick: () => ((el().innerHTML = before), emit()) } })
       return
     }
     if (e.key !== 'Enter' || e.shiftKey) return
@@ -583,7 +583,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
     if (!btn) return
     e.preventDefault()
     const chip = btn.closest('.note-chip') as HTMLElement
-    await copy(chipText(chip))
+    await copy(chipText(chip), true)
     chip.classList.add('is-copied')
     setTimeout(() => chip.classList.remove('is-copied'), 1200)
   }
@@ -632,10 +632,10 @@ export const RichNote = forwardRef<RichNoteHandle, {
 
   const close = useCallback(() => setMenu(null), [])
 
-  const copy = async (text: string) => {
+  const copy = async (text: string, quiet = false) => {
     try {
       await navigator.clipboard.writeText(text)
-      toast({ title: 'Скопійовано' })
+      if (!quiet) toast({ title: 'Скопійовано' })
     } catch {
       toast({ kind: 'error', title: 'Не вдалося скопіювати', text: 'Виділіть текст і натисніть Ctrl+C' })
     }
@@ -696,7 +696,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
                   const before = snapshot()
                   imgBox!.replaceWith(makeLinkChip(imgBox!.dataset.url ?? ''))
                   close()
-                  done('Відео стало посиланням', before)
+                  done('Відео стало посиланням', before, true)
                 },
               } as MenuAction,
               { label: 'Прибрати з нотатки', icon: 'trashLines', tone: 'danger', onSelect: () => (close(), removeImageBox(imgBox!)) } as MenuAction,
@@ -723,7 +723,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
                   const before = snapshot()
                   menu!.chip!.replaceWith(makeVideo(chipText(menu!.chip!)))
                   close()
-                  done('Посилання стало відео', before)
+                  done('Посилання стало відео', before, true)
                 },
               } as MenuAction,
             ]
@@ -736,7 +736,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
             const before = snapshot()
             menu.chip!.replaceWith(document.createTextNode(chipText(menu.chip!)))
             close()
-            done('Кнопку прибрано', before)
+            done('Кнопку прибрано', before, true)
           },
         },
         {
@@ -762,7 +762,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
             const before = snapshot()
             const on = toggleNumbering(blocks)
             close()
-            done(on ? 'Нумерацію додано' : 'Нумерацію прибрано', before)
+            done(on ? 'Нумерацію додано' : 'Нумерацію прибрано', before, true)
           },
         },
         copyItem,
@@ -779,7 +779,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
               if (range) select(range)
               const before = snapshot()
               document.execCommand('insertText', false, text)
-              done('Вставлено', before)
+              done('Вставлено', before, true)
             } catch {
               toast({ kind: 'error', title: 'Не вдалося вставити', text: 'Скористайтеся Ctrl+V у нотатці' })
             }
@@ -804,7 +804,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
             r.collapse(true)
             select(r)
             close()
-            done('Кнопку додано', before)
+            done('Кнопку додано', before, true)
           },
         },
         {
