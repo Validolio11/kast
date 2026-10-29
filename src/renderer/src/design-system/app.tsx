@@ -843,16 +843,18 @@ export function ContextMenu({
   onClose: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState({ left: x, top: y })
+  const [pos, setPos] = useState<CSSProperties>({ left: x, top: y })
 
-  // Тримаємо меню в межах вікна
+  // Тримаємо меню в межах вікна; вище за вікно — гортається всередині
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
     const { width, height } = el.getBoundingClientRect()
+    const room = innerHeight - 16
+    if (height > room) return setPos({ left: Math.max(8, Math.min(x, innerWidth - width - 8)), top: 8, maxHeight: room, overflowY: 'auto' })
     setPos({
       left: Math.max(8, Math.min(x, innerWidth - width - 8)),
-      top: Math.max(8, y + height > innerHeight - 8 ? y - height : y),
+      top: Math.max(8, Math.min(y + height > innerHeight - 8 ? y - height : y, innerHeight - height - 8)),
     })
   }, [x, y])
 

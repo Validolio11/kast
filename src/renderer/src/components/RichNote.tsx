@@ -12,12 +12,16 @@ import {
   alignBlocks,
   alignOf,
   applyStyle,
+  applyStyles,
   BASE_SIZE,
   blockOf,
   blocksIn,
   chipText,
+  findAll,
   FONTS,
   fontStack,
+  MARKS,
+  ownStyles,
   makeChip,
   makeImage,
   makeLinkChip,
@@ -29,6 +33,7 @@ import {
   sanitize,
   serialize,
   styleAt,
+  TEXT_COLORS,
   toggleNumbering,
   URL_RE,
   videoCover,
@@ -36,6 +41,8 @@ import {
   type Align,
   type ImgSize,
   type ImgWrap,
+  type StyleProp,
+  type Styles,
 } from './richText'
 
 export interface RichNoteHandle {
@@ -58,6 +65,15 @@ interface MenuState {
  * Редактор нотатки з контекстним меню Karkas: шрифт, розмір, товщина,
  * нумерація, копіювати, вставити, «кнопка копіювання», видалити.
  */
+/** Підсвітка діапазонів без зміни тексту (CSS Highlight API): справжнє виділення в браузері лише одне */
+function highlight(name: string, ranges: Range[]) {
+  const reg = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights
+  const H = (window as unknown as { Highlight?: new (...r: Range[]) => unknown }).Highlight
+  if (!reg || !H) return
+  if (ranges.length) reg.set(name, new H(...ranges))
+  else reg.delete(name)
+}
+
 export const RichNote = forwardRef<RichNoteHandle, {
   html: string
   placeholder: string
@@ -71,14 +87,15 @@ export const RichNote = forwardRef<RichNoteHandle, {
   const editor = useRef<HTMLDivElement>(null)
   /** Шматки, додані з Ctrl: стиль із меню застосовується до всіх разом */
   const extra = useRef<Range[]>([])
-  /** Підсвітка доданих шматків (CSS Highlight API): справжнє виділення в браузері лише одне */
-  const paintExtra = () => {
-    const reg = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights
-    const H = (window as unknown as { Highlight?: new (...r: Range[]) => unknown }).Highlight
-    if (!reg || !H) return
-    if (extra.current.length) reg.set('kast-multi', new H(...extra.current))
-    else reg.delete('kast-multi')
-  }
+  const paintExtra = () => highlight('kast-multi', extra.current)
+  /** Пензлик формату: стилі, які переносимо на наступне виділення (до Esc чи «Готово») */
+  const [painter, setPainter] = useState<Styles | null>(null)
+  /** Пошук у нотатці (Ctrl+F): null — закритий */
+  const [find, setFind] = useState<string | null>(null)
+  const [hit, setHit] = useState({ i: 0, n: 0 })
+  const found = useRef<Range[]>([])
+  const findInput = useRef<HTMLInputElement>(null)
+  const scroller = useRef<HTMLDivElement>(null)
   const clearExtra = () => {
     if (!extra.current.length) return
     extra.current = []
@@ -221,6 +238,78 @@ export const RichNote = forwardRef<RichNoteHandle, {
     sel?.addRange(range)
   }
   const snapshot = () => el().innerHTML
+
+  /** Знайти й підсвітити збіги; i — котрий із них поточний (по колу) */
+  const runFind = (q: string, i = 0, reveal = true) => {
+    found.current = findAll(el(), q)
+    const n = found.current.length
+    const k = n ? ((i % n) + n) % n : 0
+    setHit({ i: k, n })
+    highlight('kast-find', found.current)
+    highlight('kast-find-now', n ? [found.current[k]] : [])
+    if (n && reveal) revealRange(found.current[k])
+  }
+  /** Прокрутити так, щоб збіг було видно (спершу текст нотатки, потім сторінку) */
+  const revealRange = (range: Range) => {
+    const box = range.getBoundingClientRect()
+    const s = scroller.current
+    if (s) {
+      const view = s.getBoundingClientRect()
+      if (box.top < view.top || box.bottom > view.bottom) s.scrollTop += box.top - view.top - view.height / 3
+    }
+    const after = range.getBoundingClientRect()
+    if (after.top < 0 || after.bottom > innerHeight) range.startContainer.parentElement?.scrollIntoView({ block: 'center' })
+  }
+  const openFind = () => {
+    const sel = getSelection()
+    const picked = sel?.rangeCount && el().contains(sel.anchorNode) ? sel.toString().trim() : ''
+    const q = picked && !picked.includes('\n') && picked.length <= 60 ? picked : find ?? ''
+    setFind(q)
+    runFind(q, 0)
+    requestAnimationFrame(() => findInput.current?.select())
+  }
+  /** Закрити пошук; з Esc — виділити поточний збіг, щоб одразу його правити */
+  const closeFind = (pick: boolean) => {
+    const cur = found.current[hit.i]
+    setFind(null)
+    found.current = []
+    highlight('kast-find', [])
+    highlight('kast-find-now', [])
+    if (pick && cur && !cur.collapsed && !readOnly) {
+      el().focus()
+      select(cur)
+    }
+  }
+
+  // Ctrl+F (і в українській розкладці): відкриває пошук у тій нотатці, яку зараз видно
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || !(e.ctrlKey || e.metaKey) || e.altKey || e.code !== 'KeyF') return
+      const s = scroller.current
+      if (!s) return
+      const box = s.getBoundingClientRect()
+      const y = (Math.max(box.top, 0) + Math.min(box.bottom, innerHeight)) / 2
+      const top = document.elementFromPoint(box.left + box.width / 2, y)
+      if (!top || !s.contains(top)) return
+      e.preventDefault()
+      openFind()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  })
+  // Підсвітки живуть у глобальному реєстрі — прибираємо, коли нотатку закрили
+  useEffect(() => () => ['kast-multi', 'kast-find', 'kast-find-now'].forEach((name) => highlight(name, [])), [])
+
+  /** Пензлик: застосувати збережений формат до щойно виділеного (і до шматків, доданих з Ctrl) */
+  const paintSelection = () => {
+    if (!painter) return
+    const sel = getSelection()
+    if (!sel?.rangeCount || sel.isCollapsed || !el().contains(sel.getRangeAt(0).commonAncestorContainer)) return
+    const results = [...extra.current, sel.getRangeAt(0)].map((x) => applyStyles(el(), x, painter))
+    clearExtra()
+    select(results[results.length - 1])
+    emit()
+  }
   /** Після дії — коротке сповіщення; для змін тексту — зі «Скасувати» */
   /** quiet — рутинне форматування: без сповіщення (повторна дія або меню повертають як було) */
   const done = (title: string, before?: string, quiet = false) => {
@@ -311,6 +400,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape' && extra.current.length) return clearExtra()
+    if (e.key === 'Escape' && painter) return setPainter(null)
     const handle = (e.target as HTMLElement).closest('.note-media-drag')
     if (handle && !readOnly && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault()
@@ -663,11 +753,11 @@ export const RichNote = forwardRef<RichNoteHandle, {
   const allRanges = () =>
     [...extra.current, ...(menu?.range && !menu.range.collapsed ? [menu.range] : [])].filter((x) => !x.collapsed && x.toString().trim())
 
-  const restyle = (prop: 'font-family' | 'font-size' | 'font-weight', value: string) => {
+  const restyle = (styles: Styles) => {
     const ranges = allRanges()
     if (!ranges.length) return
     // Діапазони «живі»: після зміни одного решта підлаштовуються під новий DOM
-    const results = ranges.map((x) => applyStyle(el(), x, prop, value))
+    const results = ranges.map((x) => applyStyles(el(), x, styles))
     const last = results[results.length - 1]
     extra.current = results.slice(0, -1)
     paintExtra()
@@ -795,6 +885,16 @@ export const RichNote = forwardRef<RichNoteHandle, {
             done(on ? 'Нумерацію додано' : 'Нумерацію прибрано', before, true)
           },
         },
+        {
+          label: 'Пензлик формату',
+          icon: 'brush',
+          onSelect: () => {
+            const range = menu?.range ?? lastRange.current
+            if (range) setPainter(ownStyles(el(), range))
+            clearExtra()
+            close()
+          },
+        },
         copyItem,
         {
           label: 'Вставити',
@@ -858,8 +958,77 @@ export const RichNote = forwardRef<RichNoteHandle, {
 
   return (
     <>
+      {find !== null && (
+        <div className="mb-3 flex h-11 shrink-0 items-center gap-1 rounded-[22px] bg-canvas p-1 pl-4 text-white">
+          <Icon name="search" size={16} className="shrink-0 text-muted" />
+          <input
+            ref={findInput}
+            value={find}
+            onChange={(e) => {
+              setFind(e.target.value)
+              runFind(e.target.value, 0)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                runFind(find, hit.i + (e.shiftKey ? -1 : 1))
+              } else if (e.key === 'Escape') {
+                e.preventDefault()
+                e.stopPropagation()
+                closeFind(true)
+              }
+            }}
+            placeholder="Пошук у нотатці"
+            aria-label="Пошук у нотатці"
+            className="h-full min-w-0 flex-1 bg-transparent px-2 text-[15px] font-semibold caret-growth outline-none placeholder:text-muted"
+          />
+          {find.trim() && (
+            <span aria-live="polite" className="shrink-0 px-1.5 text-[13px] font-bold whitespace-nowrap text-muted tabular-nums">
+              {hit.n ? `${hit.i + 1} з ${hit.n}` : 'Немає'}
+            </span>
+          )}
+          <button
+            type="button"
+            aria-label="Попередній збіг"
+            data-tip="Попередній · Shift+Enter"
+            disabled={!hit.n}
+            onClick={() => runFind(find, hit.i - 1)}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full hover:bg-steel disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            <Icon name="arrowUp" size={17} />
+          </button>
+          <button
+            type="button"
+            aria-label="Наступний збіг"
+            data-tip="Наступний · Enter"
+            disabled={!hit.n}
+            onClick={() => runFind(find, hit.i + 1)}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full hover:bg-steel disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            <Icon name="arrowDown" size={17} />
+          </button>
+          <button
+            type="button"
+            aria-label="Закрити пошук"
+            onClick={() => closeFind(false)}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-paper text-ink"
+          >
+            <Icon name="x" size={16} strokeWidth={2.4} />
+          </button>
+        </div>
+      )}
+      {painter && (
+        <div className="mb-3 flex h-11 shrink-0 items-center gap-2.5 rounded-[22px] bg-canvas p-1 pl-4 text-white">
+          <Icon name="brush" size={17} className="shrink-0 text-growth" />
+          <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">Пензлик: виділіть текст, щоб перенести формат</span>
+          <button type="button" onClick={() => setPainter(null)} className="h-9 shrink-0 rounded-full bg-paper px-4 text-[13px] font-bold text-ink">
+            Готово
+          </button>
+        </div>
+      )}
       {/* Текст і галерея фото гортаються разом; клік у порожнє місце під текстом ставить курсор у кінець */}
       <div
+        ref={scroller}
         className="min-h-0 flex-1 overflow-y-auto"
         onMouseDown={(e) => {
           if (e.target !== e.currentTarget || readOnly) return
@@ -891,12 +1060,15 @@ export const RichNote = forwardRef<RichNoteHandle, {
           aria-label="Текст нотатки"
           aria-readonly={readOnly || undefined}
           data-media-moving={mediaMoving || undefined}
+          data-painting={painter ? '' : undefined}
           data-placeholder={placeholder}
           data-empty={(empty && !readOnly) || undefined}
           onInput={() => {
             clearExtra()
             emit()
+            if (find !== null) runFind(find, hit.i, false)
           }}
+          onMouseUp={() => painter && requestAnimationFrame(paintSelection)}
           onMouseDown={(e) => {
             if (e.button !== 0) return
             // Ctrl + виділення додає ще один шматок (як у Word); звичайний клік — починає наново
@@ -930,7 +1102,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
           header={
             readOnly || menu.chip ? undefined : (
               <div className="flex flex-col gap-2">
-                {imgBox ? <ImageBar box={imgBox} onChange={(patch) => restyleImage(imgBox, patch)} /> : hasText && <FormatBar range={menu.range!} onStyle={restyle} />}
+                {imgBox ? <ImageBar box={imgBox} onChange={(patch) => restyleImage(imgBox, patch)} /> : hasText && <FormatBar range={menu.range!} own={ownStyles(el(), menu.range!)} onStyle={(prop, value) => restyle({ [prop]: value })} />}
                 <AlignBar value={alignOf(alignTargets()[0] ?? null)} onChange={align} />
               </div>
             )
@@ -1031,8 +1203,43 @@ function ImageBar({ box, onChange }: { box: HTMLElement; onChange: (patch: { siz
   )
 }
 
-/** Верх меню: шрифт (зі списком і пошуком), розмір, товщина — як у Karkas */
-function FormatBar({ range, onStyle }: { range: Range; onStyle: (prop: 'font-family' | 'font-size' | 'font-weight', value: string) => void }) {
+/** Ряд кольорів: «без кольору» і палітра; кружечки з обідком, щоб темні кольори було видно на темному меню */
+function Swatches({ label, options, value, onPick }: { label: string; options: { value: string; label: string }[]; value: string; onPick: (v: string) => void }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="px-1 text-[12px] font-bold text-muted">{label}</span>
+      <div role="group" aria-label={label} className="flex gap-0.5 rounded-[19px] bg-tile p-[3px]">
+        <button
+          type="button"
+          aria-label="Без кольору"
+          data-tip="Без кольору"
+          aria-pressed={!value}
+          onClick={() => onPick('')}
+          className={cn('grid h-[34px] flex-1 place-items-center rounded-2xl', !value ? 'bg-paper text-ink' : 'text-white hover:bg-steel')}
+        >
+          <Icon name="x" size={15} strokeWidth={2.6} />
+        </button>
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            aria-label={o.label}
+            data-tip={o.label}
+            aria-pressed={o.value === value}
+            onClick={() => onPick(o.value)}
+            className={cn('grid h-[34px] flex-1 place-items-center rounded-2xl', o.value === value ? 'bg-paper' : 'hover:bg-steel')}
+          >
+            {/* Маркер напівпрозорий — показуємо, яким він буде на папері нотатки */}
+            <span className="note-swatch" style={{ background: `linear-gradient(${o.value}, ${o.value}), var(--color-paper)` }} />
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Верх меню: шрифт (зі списком і пошуком), розмір, товщина, колір і маркер — як у Karkas */
+function FormatBar({ range, own, onStyle }: { range: Range; own: Record<StyleProp, string>; onStyle: (prop: StyleProp, value: string) => void }) {
   const cur = styleAt(range)
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -1113,6 +1320,8 @@ function FormatBar({ range, onStyle }: { range: Range; onStyle: (prop: 'font-fam
           ))}
         </div>
       </div>
+      <Swatches label="Колір тексту" options={TEXT_COLORS} value={own.color} onPick={(v) => onStyle('color', v)} />
+      <Swatches label="Маркер" options={MARKS} value={own['background-color']} onPick={(v) => onStyle('background-color', v)} />
     </div>
   )
 }

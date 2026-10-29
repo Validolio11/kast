@@ -1,5 +1,5 @@
 /*
- * Форматований текст нотатки: рядки — <div>, стилі — <span style> (шрифт, розмір, товщина),
+ * Форматований текст нотатки: рядки — <div>, стилі — <span style> (шрифт, розмір, товщина, колір, маркер),
  * «кнопка копіювання» — нередагований чип. Зберігаємо HTML для вигляду й простий текст для пошуку,
  * заголовків і синхронізації.
  */
@@ -16,7 +16,25 @@ export const WEIGHTS = [
 ]
 export const BASE_SIZE = 17
 
-const STYLE_PROPS = ['font-family', 'font-size', 'font-weight'] as const
+const STYLE_PROPS = ['font-family', 'font-size', 'font-weight', 'color', 'background-color'] as const
+export type StyleProp = (typeof STYLE_PROPS)[number]
+export type Styles = Partial<Record<StyleProp, string>>
+
+/** Кольори тексту й маркера — лише з палітри (CSS-змінні в index.css), тож вставлений з інтернету колір не прилипне */
+export const TEXT_COLORS = [
+  { value: 'var(--note-c-green)', label: 'Зелений' },
+  { value: 'var(--note-c-violet)', label: 'Фіолетовий' },
+  { value: 'var(--note-c-red)', label: 'Червоний' },
+  { value: 'var(--note-c-grey)', label: 'Сірий' },
+]
+export const MARKS = [
+  { value: 'var(--note-m-green)', label: 'Зелений маркер' },
+  { value: 'var(--note-m-yellow)', label: 'Жовтий маркер' },
+  { value: 'var(--note-m-violet)', label: 'Фіолетовий маркер' },
+  { value: 'var(--note-m-red)', label: 'Червоний маркер' },
+]
+const PALETTE_RE = /^var\(--note-[cm]-[a-z]+\)$/
+const COLOR_PROPS: StyleProp[] = ['color', 'background-color']
 const NUMBER_PREFIX = /^\d+[.)]\s/
 
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -253,7 +271,7 @@ export function sanitize(html: string) {
         const span = document.createElement('span')
         for (const p of STYLE_PROPS) {
           const v = el.style.getPropertyValue(p)
-          if (v) span.style.setProperty(p, v)
+          if (v && (!COLOR_PROPS.includes(p) || PALETTE_RE.test(v))) span.style.setProperty(p, v)
         }
         walk(el, span)
         return void to.appendChild(span)
@@ -335,8 +353,26 @@ function rangeIn(node: Node, range: Range) {
 }
 
 /** Обгортає частину кожного рядка з діапазону в <span> зі стилем; повертає нове виділення */
-export function applyStyle(editor: HTMLElement, range: Range, prop: (typeof STYLE_PROPS)[number], value: string) {
-  const spans: HTMLSpanElement[] = []
+export const applyStyle = (editor: HTMLElement, range: Range, prop: StyleProp, value: string) => applyStyles(editor, range, { [prop]: value })
+
+/** Кілька властивостей за раз (пензлик формату); порожнє значення — прибрати властивість */
+export function applyStyles(editor: HTMLElement, range: Range, styles: Styles) {
+  const props = Object.keys(styles) as StyleProp[]
+  const set = (s: HTMLElement) => props.forEach((p) => (styles[p] ? s.style.setProperty(p, styles[p]!) : s.style.removeProperty(p)))
+  const strip = (root: ParentNode) =>
+    root.querySelectorAll<HTMLSpanElement>('span[style]').forEach((s) => {
+      props.forEach((p) => s.style.removeProperty(p))
+      if (!s.getAttribute('style')) s.replaceWith(...Array.from(s.childNodes))
+    })
+  // Спан без жодного стилю зайвий: розгортаємо, а межі виділення ставимо по його вмісту
+  const bounds: [Node, Node][] = []
+  const keep = (span: HTMLSpanElement) => {
+    if (span.getAttribute('style')) return void bounds.push([span, span])
+    const kids = Array.from(span.childNodes)
+    if (!kids.length) return void span.remove()
+    span.replaceWith(...kids)
+    bounds.push([kids[0], kids[kids.length - 1]])
+  }
   for (const block of blocksIn(editor, range)) {
     const sub = document.createRange()
     sub.selectNodeContents(block)
@@ -346,30 +382,44 @@ export function applyStyle(editor: HTMLElement, range: Range, prop: (typeof STYL
     // Виділення вже точно збігається з одним стилізованим спаном — міняємо його, а не вкладаємо новий
     const own = ownSpan(sub, block)
     if (own) {
-      own.style.setProperty(prop, value)
-      own.querySelectorAll<HTMLSpanElement>('span[style]').forEach((s) => s.style.removeProperty(prop))
-      spans.push(own)
+      set(own)
+      strip(own)
+      keep(own)
       continue
     }
     const frag = sub.extractContents()
-    // Вкладені спани з тією самою властивістю більше не потрібні
-    frag.querySelectorAll<HTMLSpanElement>('span[style]').forEach((s) => {
-      s.style.removeProperty(prop)
-      if (!s.getAttribute('style')) s.replaceWith(...Array.from(s.childNodes))
-    })
+    // Вкладені спани з тими самими властивостями більше не потрібні
+    strip(frag)
     const span = document.createElement('span')
-    span.style.setProperty(prop, value)
+    set(span)
     span.appendChild(frag)
     sub.insertNode(span)
-    spans.push(span)
+    keep(span)
   }
+  if (!bounds.length) return range
   const next = document.createRange()
-  if (spans.length) {
-    next.setStart(spans[0], 0)
-    const last = spans[spans.length - 1]
-    next.setEnd(last, last.childNodes.length)
+  const [a] = bounds[0]
+  const [, b] = bounds[bounds.length - 1]
+  if (a === b && a.nodeType === Node.ELEMENT_NODE) next.selectNodeContents(a)
+  else {
+    next.setStartBefore(a)
+    next.setEndAfter(b)
   }
-  return spans.length ? next : range
+  return next
+}
+
+/** Стилі, записані в тексті на початку діапазону (не обчислені): для пензлика і позначок у меню */
+export function ownStyles(editor: HTMLElement, range: Range): Record<StyleProp, string> {
+  const out = Object.fromEntries(STYLE_PROPS.map((p) => [p, ''])) as Record<StyleProp, string>
+  let n: Node | null =
+    range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer.childNodes[range.startOffset] ?? range.startContainer : range.startContainer
+  // Межа «перед спаном» — беремо перший текст усередині
+  while (n && n.nodeType === Node.ELEMENT_NODE && n.firstChild && (n as HTMLElement).tagName === 'SPAN' && !range.collapsed) n = n.firstChild
+  for (; n && n !== editor; n = n.parentNode) {
+    if (n.nodeType !== Node.ELEMENT_NODE || (n as HTMLElement).tagName !== 'SPAN') continue
+    for (const p of STYLE_PROPS) out[p] ||= (n as HTMLElement).style.getPropertyValue(p)
+  }
+  return out
 }
 
 function ownSpan(range: Range, block: HTMLElement): HTMLSpanElement | null {
@@ -384,6 +434,36 @@ function ownSpan(range: Range, block: HTMLElement): HTMLSpanElement | null {
     n = n.parentNode
   }
   return found
+}
+
+/** Усі збіги тексту в нотатці (без урахування регістру); слово може бути розбите стилями на кілька вузлів */
+export function findAll(editor: HTMLElement, query: string): Range[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+  const out: Range[] = []
+  for (const block of Array.from(editor.children)) {
+    const nodes: Text[] = []
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.parentElement?.closest('.note-chip, .note-img') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+    })
+    while (walker.nextNode()) nodes.push(walker.currentNode as Text)
+    const text = nodes.map((t) => t.data).join('').toLowerCase()
+    // Початок кожного вузла в загальному рядку блоку
+    const starts: number[] = []
+    nodes.reduce((at, t) => (starts.push(at), at + t.length), 0)
+    const at = (i: number, end: boolean): [Text, number] => {
+      let k = nodes.length - 1
+      while (k > 0 && (end ? starts[k] >= i : starts[k] > i)) k--
+      return [nodes[k], i - starts[k]]
+    }
+    for (let i = text.indexOf(q); i >= 0; i = text.indexOf(q, i + q.length)) {
+      const r = document.createRange()
+      r.setStart(...at(i, false))
+      r.setEnd(...at(i + q.length, true))
+      out.push(r)
+    }
+  }
+  return out
 }
 
 /** Простий текст нотатки: рядок на блок, чип — своїм текстом (innerText ламає рядки на чипах) */
