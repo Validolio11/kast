@@ -292,6 +292,20 @@
     height: 16px;
     border-radius: 8px;
     box-shadow: 0 0 0 1.5px var(--color-paper);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .note-swatch-btn:hover > .note-swatch {
+    transform: scale(1.15);
+  }
+  .note-swatch-btn[aria-pressed='true'] > .note-swatch {
+    box-shadow: 0 0 0 2px var(--color-tile), 0 0 0 4px var(--color-paper);
+    transform: none;
+  }
+  .note-swatch-btn:focus-visible {
+    outline: none;
+  }
+  .note-swatch-btn:focus-visible > .note-swatch {
+    box-shadow: 0 0 0 2px var(--color-tile), 0 0 0 4px var(--color-growth);
   }
   /* Пензлик формату: курсор-пензлик над текстом */
   .note-editor[data-painting] {

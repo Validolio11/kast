@@ -1242,16 +1242,19 @@ function ColorPicker({ own, onStyle }: { own: Record<StyleProp, string>; onStyle
           )
         })}
       </div>
-      <div role="group" aria-label={mode === 'color' ? 'Колір тексту' : 'Колір маркера'} className="flex gap-px rounded-[19px] bg-tile p-[3px]">
+      <div role="group" aria-label={mode === 'color' ? 'Колір тексту' : 'Колір маркера'} className="flex gap-px rounded-[20px] bg-tile px-2 py-[3px]">
         <button
           type="button"
           aria-label="Без кольору"
           data-tip="Без кольору"
           aria-pressed={!value}
           onClick={() => onStyle(mode, '')}
-          className={cn('grid h-[34px] min-w-0 flex-1 place-items-center rounded-2xl', !value ? 'bg-paper text-ink' : 'text-white hover:bg-steel')}
+          className="note-swatch-btn grid h-[34px] min-w-0 flex-1 place-items-center"
         >
-          <Icon name="x" size={13} strokeWidth={2.8} />
+          {/* Вибір — кільце навколо кружечка: вузька кнопка не дає капсулі збігтися із заокругленням ряду */}
+          <span className="note-swatch grid place-items-center bg-steel text-white">
+            <Icon name="x" size={10} strokeWidth={3} />
+          </span>
         </button>
         {options.map((o) => (
           <button
@@ -1261,7 +1264,7 @@ function ColorPicker({ own, onStyle }: { own: Record<StyleProp, string>; onStyle
             data-tip={o.label}
             aria-pressed={o.value === value}
             onClick={() => onStyle(mode, o.value)}
-            className={cn('grid h-[34px] min-w-0 flex-1 place-items-center rounded-2xl', o.value === value ? 'bg-paper' : 'hover:bg-steel')}
+            className="note-swatch-btn grid h-[34px] min-w-0 flex-1 place-items-center"
           >
             <span className="note-swatch" style={{ background: onPaper(o.value) }} />
           </button>
