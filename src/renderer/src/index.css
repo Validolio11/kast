@@ -689,13 +689,13 @@
     border-radius: 28px;
   }
   .notebook-back { display: inline-flex; flex-shrink: 0; align-items: center; align-self: flex-start; gap: 6px; min-height: 40px; margin-top: -8px; margin-bottom: 8px; padding: 0 8px 0 2px; border-radius: 20px; color: var(--color-paper-muted); font-size: 14px; font-weight: 800; }
-  .notebook-sheet-meta { flex-wrap: wrap; gap: 6px; }
-  .notebook-sheet-meta > span:last-child { font-size: 11px; }
+  /* Дата й «Рядок у задачі» — в один рядок: дата за потреби обрізається, кнопка лишається в куті */
+  .notebook-sheet-meta { flex-wrap: nowrap; gap: 6px; }
+  .notebook-sheet-meta > span:not([class*='chip']) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+  .notebook-convert-action { flex-shrink: 0; height: 36px; padding-inline: 12px; font-size: 13px; }
   .notebook-sheet > input { flex-shrink: 0; margin-top: 14px; font-size: 28px; }
   .notebook-sheet > input + div { margin-top: 16px; }
   .notebook-sheet-footer { gap: 6px; margin-top: 12px; padding-top: 12px; }
-  .notebook-convert-action { flex: 1 1 100%; }
-  .notebook-convert-action > button { width: 100%; height: 40px; font-size: 13px; }
   .notebook-page-controls { order: -1; flex: 1 1 100%; min-width: 0; justify-content: flex-start; align-items: center; gap: 6px; }
   .notebook-page-controls [role='tablist'] { min-width: 0; flex-shrink: 1; overflow-x: auto; overscroll-behavior-x: contain; }
   .notebook-page-controls [role='tablist'] > button { width: 40px; height: 40px; flex-shrink: 0; }
@@ -747,9 +747,8 @@
   .app-nav-item[aria-current='page'] .app-nav-count { background: var(--color-canvas); }
   /* Назви задач — до двох рядків замість обрізання на півслові */
   .pulse-row .truncate { display: -webkit-box; overflow: hidden; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-  /* Блокнот: сторінки й кнопки в одному ряду, «Рядок у задачі» — під ними */
+  /* Блокнот: сторінки й кнопки в одному ряду */
   .notebook-page-controls { flex: 1 1 auto; }
-  .notebook-convert-action { order: 1; }
   /* Фокус: спершу крок, потім таймер і нотатки; налаштування задачі — нижче */
   .focus-view .page-grid { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
   .focus-view .page-grid-side, .focus-view .page-grid-main { display: contents; }

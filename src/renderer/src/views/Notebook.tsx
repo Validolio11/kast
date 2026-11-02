@@ -266,6 +266,12 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
         <span className="text-[14px] font-bold text-dim">
           Змінено {age(note.updatedAt)}, {fmtTime(note.updatedAt)}
         </span>
+        {/* Дія з рядком — у верхньому правому куті аркуша; у заблокованій нотатці її немає */}
+        {!locked && (
+          <Button variant="canvas" size="sm" iconLeft="arrowUpRight" className="notebook-convert-action ml-auto" onClick={() => editorRef.current?.convertCurrent()} data-tip="Ctrl + Enter">
+            Рядок у задачі
+          </Button>
+        )}
       </div>
       <div className="mt-5 flex items-center gap-3 max-[640px]:gap-2">
       <EmojiPicker value={note.icon} disabled={locked} onChange={(icon) => updateNote(note.id, { icon })} />
@@ -304,17 +310,9 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
           }}
         />
       </div>
-      {/* Підвал як у Karkas: дія ліворуч, сторінки по центру, закріпити й видалити праворуч; тісно — переноситься */}
+      {/* Підвал: сторінки ліворуч, фото, замок, закріпити й видалити праворуч; тісно — переноситься */}
       <div className="notebook-sheet-footer mt-4 flex flex-wrap items-center gap-2 border-t border-paper-line pt-4">
-        {/* Заблокована нотатка: окремої кнопки «Редагувати» немає — розблоковує замок праворуч */}
-        {!locked && (
-          <div className="notebook-convert-action">
-            <Button variant="canvas" size="md" iconLeft="arrowUpRight" onClick={() => editorRef.current?.convertCurrent()} data-tip="Ctrl + Enter">
-              Рядок у задачі
-            </Button>
-          </div>
-        )}
-        <div className="notebook-page-controls flex flex-1 justify-center">
+        <div className="notebook-page-controls flex flex-1 justify-start">
           <div
             role="tablist"
             aria-label="Сторінки"
