@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, CaptureField, cn, ContextMenu, InfoRow, Icon, PulseChip, RoundButton, useToast } from '@/design-system'
+import { Button, CaptureField, cn, ContextMenu, InfoRow, Icon, PulseChip, RoundButton, useRowEnter, useToast } from '@/design-system'
 import { Page } from '@/components/Page'
 import { useNotes } from '@/data/hooks'
 import { EmojiPicker } from '@/components/EmojiPicker'
@@ -100,12 +100,14 @@ export function Notebook({ captureRef }: { captureRef: React.RefObject<HTMLInput
 }
 
 function NoteTile({ note, selected, onClick }: { note: Note; selected: boolean; onClick: () => void }) {
+  const enter = useRowEnter()
   return (
     <button
       onClick={onClick}
       aria-current={selected || undefined}
       className={cn(
-        'row-enter flex shrink-0 items-center gap-3 rounded-[30px] px-6 py-[18px] text-left transition-colors duration-150',
+        'flex shrink-0 items-center gap-3 rounded-[30px] px-6 py-[18px] text-left transition-colors duration-150',
+        enter,
         selected ? 'bg-steel' : 'bg-tile hover:bg-[#2a2a2c]',
       )}
     >

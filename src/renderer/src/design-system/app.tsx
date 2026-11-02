@@ -3,7 +3,7 @@
  * Кожна сторінка збирається однаково: PageHead (два рядки великими) → PageGrid (колонка 400px + основна).
  * Джерело токенів і правил — дизайн-система «Karkas Pulse» у конструкторі.
  */
-import { forwardRef, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react'
+import { createContext, forwardRef, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
 import { cn } from './utils'
@@ -325,6 +325,19 @@ export function ListSection({
 
 /* ───────────── Рядок задачі ───────────── */
 /** Капсула 60px з тонкою обвідкою tile; дії з'являються при наведенні */
+/** Сторінка ще з'являється (перша секунда): рядки, що вже є, їдуть разом зі своєю секцією */
+export const EnteringContext = createContext(false)
+
+/**
+ * Клас появи рядка вирішується раз, при монтуванні: рядок, що був на сторінці під час її появи, не анімується
+ * ніколи (інакше, коли поява закінчується, анімація вмикається й рядки підстрибують удруге). Анімується лише доданий пізніше.
+ */
+export function useRowEnter() {
+  const entering = useContext(EnteringContext)
+  const [cls] = useState(() => (entering ? '' : 'row-enter'))
+  return cls
+}
+
 export function PulseRow({
   leading,
   title,
@@ -352,10 +365,12 @@ export function PulseRow({
   /** Задачу щойно виконано: спливає «+1 зроблено», рядок від'їжджає й тьмяніє, потім іде у «Зроблено» */
   finishing?: boolean
 }) {
+  const enter = useRowEnter()
   return (
     <div
       className={cn(
-        'pulse-row group row-enter relative flex min-h-[60px] items-center gap-3.5 rounded-[30px] pr-4 pl-3.5 transition-colors duration-150',
+        'pulse-row group relative flex min-h-[60px] items-center gap-3.5 rounded-[30px] pr-4 pl-3.5 transition-colors duration-150',
+        enter,
         finishing && 'animate-row-away',
         selected ? 'bg-steel' : 'shadow-[inset_0_0_0_1px_var(--color-tile)] hover:bg-tile',
         onClick && 'cursor-pointer',

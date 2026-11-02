@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, Card, CheckCircle, cn, ContextMenu, Icon, PageGrid, PulseChip, RoundButton, SegTabs, Stepper, useToast, type MenuAction } from '@/design-system'
+import { Button, Card, CheckCircle, cn, ContextMenu, EnteringContext, Icon, PageGrid, PulseChip, RoundButton, SegTabs, Stepper, useToast, type MenuAction } from '@/design-system'
 import { WHEN_OPTIONS } from '@/components/TaskRow'
 import { useEntering } from '@/components/Page'
 import { useTask } from '@/data/hooks'
@@ -53,6 +53,7 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
   }
 
   return (
+    <EnteringContext.Provider value={entering !== undefined}>
     <div data-entering={entering} className="focus-view h-full overflow-y-auto">
       <div className="mx-auto flex w-full max-w-[1280px] flex-col px-8 pt-6 pb-16 max-[640px]:px-4">
         <div className="mb-7 flex animate-enter items-start gap-5">
@@ -143,6 +144,7 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
         />
       </div>
     </div>
+    </EnteringContext.Provider>
   )
 }
 

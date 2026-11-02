@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { cn, PageGrid, PageHead } from '@/design-system'
+import { cn, EnteringContext, PageGrid, PageHead } from '@/design-system'
 
 /** Перша секунда після відкриття вкладки: блоки з'являються разом, рядки окремо не анімуються */
 export function useEntering() {
@@ -35,11 +35,13 @@ export function Page({
 }) {
   const entering = useEntering()
   return (
-    <div data-entering={entering} className="app-page h-full overflow-y-auto">
-      <div className={cn('app-page-content mx-auto flex w-full max-w-[1280px] flex-col px-8 pt-6 pb-16 max-[640px]:px-4', fill && 'pb-8')}>
-        <PageHead light={light} heavy={heavy} sub={sub} actions={actions} />
-        <PageGrid side={side} main={main} fill={fill} />
+    <EnteringContext.Provider value={entering !== undefined}>
+      <div data-entering={entering} className="app-page h-full overflow-y-auto">
+        <div className={cn('app-page-content mx-auto flex w-full max-w-[1280px] flex-col px-8 pt-6 pb-16 max-[640px]:px-4', fill && 'pb-8')}>
+          <PageHead light={light} heavy={heavy} sub={sub} actions={actions} />
+          <PageGrid side={side} main={main} fill={fill} />
+        </div>
       </div>
-    </div>
+    </EnteringContext.Provider>
   )
 }
