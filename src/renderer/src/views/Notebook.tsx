@@ -306,17 +306,14 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
       </div>
       {/* Підвал як у Karkas: дія ліворуч, сторінки по центру, закріпити й видалити праворуч; тісно — переноситься */}
       <div className="notebook-sheet-footer mt-4 flex flex-wrap items-center gap-2 border-t border-paper-line pt-4">
-        <div className="notebook-convert-action">
-        {locked ? (
-          <Button variant="canvas" size="md" iconLeft="pencil" onClick={toggleLock}>
-            Редагувати
-          </Button>
-        ) : (
-          <Button variant="canvas" size="md" iconLeft="arrowUpRight" onClick={() => editorRef.current?.convertCurrent()} data-tip="Ctrl + Enter">
-            Рядок у задачі
-          </Button>
+        {/* Заблокована нотатка: окремої кнопки «Редагувати» немає — розблоковує замок праворуч */}
+        {!locked && (
+          <div className="notebook-convert-action">
+            <Button variant="canvas" size="md" iconLeft="arrowUpRight" onClick={() => editorRef.current?.convertCurrent()} data-tip="Ctrl + Enter">
+              Рядок у задачі
+            </Button>
+          </div>
         )}
-        </div>
         <div className="notebook-page-controls flex flex-1 justify-center">
           <div
             role="tablist"
@@ -368,7 +365,8 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
           )}
         </div>
         {!locked && <AddImageButton onFiles={(files) => editorRef.current?.insertImages(files)} />}
-        {!locked && <RoundButton icon="lock" tone="paper-line" label="Заблокувати редагування" onClick={toggleLock} />}
+        {/* Замок показує стан: відкритий — можна писати, закритий — лише читання */}
+        <RoundButton icon={locked ? 'lock' : 'lockOpen'} tone="paper-line" label={locked ? 'Розблокувати редагування' : 'Заблокувати редагування'} onClick={toggleLock} />
         <RoundButton
           icon="pin"
           tone="paper-line"
@@ -380,7 +378,7 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
           tone="paper-line"
           label="Видалити нотатку"
           onClick={async () => {
-            if (locked) return toast({ kind: 'info', icon: 'lock', title: 'Нотатку заблоковано', text: 'Натисніть «Редагувати», щоб її видалити' })
+            if (locked) return toast({ kind: 'info', icon: 'lock', title: 'Нотатку заблоковано', text: 'Відкрийте замок, щоб її видалити' })
             flush()
             await removeNote(note.id)
             onDeleted()
