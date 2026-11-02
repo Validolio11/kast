@@ -55,6 +55,8 @@ export interface RichNoteHandle {
   focusStart(): void
   /** Вставити фото туди, де курсор (або в кінець) */
   insertImages(files: File[]): void
+  /** Дописати рядки в кінець (те, що додали ззовні, поки нотатка відкрита) */
+  appendHtml(html: string): void
 }
 
 interface MenuState {
@@ -63,6 +65,7 @@ interface MenuState {
   range: Range | null
   chip: HTMLElement | null
   img?: HTMLElement | null
+  keyboard?: boolean
 }
 
 /**
@@ -178,6 +181,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
   const insertImages = async (files: File[], at?: Range | null) => {
     if (!imageOwner || readOnly) return
     const ids = await addImages(imageOwner, files)
+    if (!editor.current?.isConnected) return
     if (!ids.length) return toast({ kind: 'error', title: 'Не вдалося додати фото', text: 'Підтримуються PNG, JPG, WebP, GIF' })
     let range = at ?? lastRange.current
     if (!range || !el().contains(range.startContainer)) {
@@ -319,6 +323,8 @@ export const RichNote = forwardRef<RichNoteHandle, {
   /** quiet — рутинне форматування: без сповіщення (повторна дія або меню повертають як було) */
   const done = (title: string, before?: string, quiet = false) => {
     emit()
+    const root = editor.current
+    const after = root?.innerHTML
     if (quiet) return
     toast(
       before === undefined
@@ -329,7 +335,9 @@ export const RichNote = forwardRef<RichNoteHandle, {
             action: {
               label: 'Скасувати',
               onClick: () => {
-                el().innerHTML = before
+                if (!root || !root.isConnected) return
+                if (root.innerHTML !== after) return toast({ kind: 'info', title: 'Нотатку вже змінено — скасувати не вийде' })
+                root.innerHTML = before
                 emit()
               },
             },
@@ -370,6 +378,14 @@ export const RichNote = forwardRef<RichNoteHandle, {
 
   useImperativeHandle(ref, () => ({
     insertImages: (files) => insertImages(files),
+    appendHtml: (html) => {
+      const e = editor.current
+      if (!e) return
+      const box = document.createElement('div')
+      box.innerHTML = sanitize(html)
+      e.append(...Array.from(box.childNodes))
+      emit()
+    },
     convertCurrent: () => convert(currentBlock(), false),
     focusStart: () => {
       el().focus()
@@ -405,8 +421,16 @@ export const RichNote = forwardRef<RichNoteHandle, {
   }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape' && extra.current.length) return clearExtra()
-    if (e.key === 'Escape' && painter) return setPainter(null)
+    if (e.key === 'Escape' && extra.current.length) {
+      e.preventDefault()
+      e.stopPropagation()
+      return clearExtra()
+    }
+    if (e.key === 'Escape' && painter) {
+      e.preventDefault()
+      e.stopPropagation()
+      return setPainter(null)
+    }
     const handle = (e.target as HTMLElement).closest('.note-media-drag')
     if (handle && !readOnly && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault()
@@ -420,7 +444,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
       const sel = getSelection()
       const range = sel?.rangeCount ? sel.getRangeAt(0) : null
       const rect = range?.getBoundingClientRect()
-      openMenu(rect?.left ?? 0, rect?.bottom ?? 0, null)
+      openMenu(rect?.left ?? 0, rect?.bottom ?? 0, null, null, true)
       return
     }
     if (readOnly || e.nativeEvent.isComposing) return
@@ -431,10 +455,10 @@ export const RichNote = forwardRef<RichNoteHandle, {
     if (e.key === ' ' && linkifyBeforeCaret(true)) return e.preventDefault()
     if (e.key === 'Enter' && !e.ctrlKey) linkifyBeforeCaret(false)
     // Браузерні Ctrl+B/I/U вставляють <b>/<i>/<u>, які Kast не зберігає. Жирний — нашим стилем, решта вимкнена.
-    if (e.ctrlKey && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
+    if (e.ctrlKey && ['KeyB', 'KeyI', 'KeyU'].includes(e.code)) {
       e.preventDefault()
       const sel = getSelection()
-      if (e.key.toLowerCase() !== 'b' || !sel?.rangeCount || sel.isCollapsed) return
+      if (e.code !== 'KeyB' || !sel?.rangeCount || sel.isCollapsed) return
       const range = sel.getRangeAt(0)
       const bold = styleAt(range).weight >= 700
       select(applyStyle(el(), range, 'font-weight', bold ? '500' : '800'))
@@ -466,13 +490,18 @@ export const RichNote = forwardRef<RichNoteHandle, {
     if (!sel?.rangeCount || !el().contains(sel.anchorNode)) return []
     return blocksIn(el(), sel.getRangeAt(0))
   }
-  /** Підпункт / рівень вище для пронумерованих рядків; false — нумерованих серед них немає */
+  /** Підпункт / рівень вище для пронумерованих рядків; false — рівні не змінились */
   const shiftLevel = (blocks: HTMLElement[], d: 1 | -1) => {
     const list = blocks.filter((b) => b.dataset.list === 'ol')
-    if (!list.length) return false
-    for (const b of list) setLevel(b, Math.max(1, Math.min(maxLevel(b), levelOf(b) + d)))
-    emit()
-    return true
+    let changed = false
+    for (const b of list) {
+      const level = Math.max(1, Math.min(maxLevel(b), levelOf(b) + d))
+      if (level === levelOf(b)) continue
+      setLevel(b, level)
+      changed = true
+    }
+    if (changed) emit()
+    return changed
   }
 
   /** Маркер — властивість рядка: Enter продовжує список, Backspace на початку знімає її. */
@@ -539,6 +568,18 @@ export const RichNote = forwardRef<RichNoteHandle, {
     emit()
     return true
   }
+
+  // Мобільна клавіатура надсилає пробіл через beforeinput, без звичайного keydown.
+  useEffect(() => {
+    const root = editor.current
+    if (!root) return
+    const beforeInput = (e: InputEvent) => {
+      if (readOnly || e.inputType !== 'insertText' || e.data !== ' ') return
+      if (listKey(' ') || linkifyBeforeCaret(true)) e.preventDefault()
+    }
+    root.addEventListener('beforeinput', beforeInput)
+    return () => root.removeEventListener('beforeinput', beforeInput)
+  })
 
   // CSS-номери не потрапляють у Range.toString(), тому копіюємо їх разом із текстом.
   const onCopy = (e: React.ClipboardEvent) => {
@@ -616,7 +657,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
     if (readOnly) return e.preventDefault()
     mediaDrag.current = box
     setMediaMoving(true)
-    setMenu(null)
+    close()
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.clearData()
     e.dataTransfer.setData(MEDIA_DRAG_TYPE, 'move')
@@ -726,10 +767,10 @@ export const RichNote = forwardRef<RichNoteHandle, {
   }
 
   /* ───────── Меню ───────── */
-  const openMenu = (x: number, y: number, chip: HTMLElement | null, img: HTMLElement | null = null) => {
+  const openMenu = (x: number, y: number, chip: HTMLElement | null, img: HTMLElement | null = null, keyboard = false) => {
     const sel = getSelection()
     const range = sel?.rangeCount && el().contains(sel.getRangeAt(0).commonAncestorContainer) ? sel.getRangeAt(0).cloneRange() : null
-    setMenu({ x, y, range, chip, img })
+    setMenu({ x, y, range, chip, img, keyboard })
   }
 
   const onContextMenu = (e: React.MouseEvent) => {
@@ -767,7 +808,13 @@ export const RichNote = forwardRef<RichNoteHandle, {
     setMenu((m) => (m ? { ...m } : m))
   }
 
-  const close = useCallback(() => setMenu(null), [])
+  const close = useCallback(() => {
+    if (menu?.keyboard && editor.current?.isConnected) {
+      el().focus()
+      if (menu.range) select(menu.range)
+    }
+    setMenu(null)
+  }, [menu])
 
   const copy = async (text: string, quiet = false) => {
     try {
@@ -779,6 +826,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
   }
 
   const hasText = (!!menu?.range && !menu.range.collapsed && !!menu.range.toString().trim()) || extra.current.length > 0
+  const formatRange = menu?.range ?? extra.current[0]
 
   /** Усі виділені шматки: додані з Ctrl і поточне виділення */
   const allRanges = () =>
@@ -1149,11 +1197,12 @@ export const RichNote = forwardRef<RichNoteHandle, {
           y={menu.y}
           label={isVideo ? 'Дії з відео' : imgBox ? 'Дії з фото' : menu.chip ? (isLink ? 'Дії з посиланням' : 'Дії з кнопкою копіювання') : 'Дії з виділеним'}
           items={items}
+          autoFocus={menu.keyboard}
           onClose={close}
           header={
             readOnly || menu.chip ? undefined : (
               <div className="flex flex-col gap-2">
-                {imgBox ? <ImageBar box={imgBox} onChange={(patch) => restyleImage(imgBox, patch)} /> : hasText && <FormatBar range={menu.range!} own={ownStyles(el(), menu.range!)} onStyle={(prop, value) => restyle({ [prop]: value })} />}
+                {imgBox ? <ImageBar box={imgBox} onChange={(patch) => restyleImage(imgBox, patch)} /> : hasText && formatRange && <FormatBar range={formatRange} own={ownStyles(el(), formatRange)} onStyle={(prop, value) => restyle({ [prop]: value })} />}
                 <AlignBar value={alignOf(alignTargets()[0] ?? null)} onChange={align} />
               </div>
             )

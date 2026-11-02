@@ -834,6 +834,7 @@ export function ContextMenu({
   header,
   items,
   onClose,
+  autoFocus,
 }: {
   x: number
   y: number
@@ -841,9 +842,14 @@ export function ContextMenu({
   header?: ReactNode
   items: MenuAction[]
   onClose: () => void
+  autoFocus?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<CSSProperties>({ left: x, top: y })
+
+  useEffect(() => {
+    if (autoFocus) ref.current?.querySelector<HTMLElement>('[role=menuitem]:not(:disabled)')?.focus({ preventScroll: true })
+  }, [autoFocus])
 
   // Тримаємо меню в межах вікна; вище за вікно — гортається всередині
   useLayoutEffect(() => {

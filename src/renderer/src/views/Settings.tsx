@@ -182,7 +182,10 @@ function HotkeyInput({ value, onChange }: { value: string; onChange: (v: string)
       onKeyDown={(e) => {
         if (!recording) return
         e.preventDefault()
-        if (e.key === 'Escape') return setRecording(false)
+        if (e.key === 'Escape') {
+          e.stopPropagation()
+          return setRecording(false)
+        }
         const acc = toAccelerator(e)
         if (acc) {
           setRecording(false)

@@ -39,7 +39,7 @@ export const fmtTime = (ts: number) => time.format(new Date(ts))
 
 /** Вік запису людською мовою: «сьогодні», «вчора», «5 дн» */
 export function age(ts: number) {
-  const days = Math.floor((fromKey(dayKey()).getTime() - fromKey(dayKey(new Date(ts))).getTime()) / DAY)
+  const days = Math.round((fromKey(dayKey()).getTime() - fromKey(dayKey(new Date(ts))).getTime()) / DAY)
   if (days <= 0) return 'сьогодні'
   if (days === 1) return 'вчора'
   if (days < 7) return `${days} дн`
