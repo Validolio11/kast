@@ -46,6 +46,26 @@ export const MARKS = [
 const PALETTE_RE = /^var\(--note-[cm]-[a-z]+\)$/
 const COLOR_PROPS: StyleProp[] = ['color', 'background-color']
 const NUMBER_PREFIX = /^\d+[.)]\s/
+/** Підрівні нумерації: 2 — 1.1., 3 — 1.1.1. (перший рівень без атрибута) */
+const LEVELS = ['2', '3']
+export const MAX_LEVEL = 3
+export const levelOf = (block: HTMLElement) => Number(block.dataset.level) || 1
+export function setLevel(block: HTMLElement, level: number) {
+  if (level > 1) block.dataset.level = String(Math.min(MAX_LEVEL, level))
+  else block.removeAttribute('data-level')
+}
+/** Найглибший дозволений рівень: на один глибше за пункт над рядком (першим підпунктом бути не можна) */
+export function maxLevel(block: HTMLElement) {
+  const prev = block.previousElementSibling as HTMLElement | null
+  return prev?.dataset.list === 'ol' ? Math.min(MAX_LEVEL, levelOf(prev) + 1) : 1
+}
+/** Підпункт без пункту над ним (номер прибрали, рядок видалили) підтягуємо вгору — інакше вийде «0.1.» */
+export function normalizeLevels(editor: HTMLElement) {
+  for (const b of Array.from(editor.children) as HTMLElement[]) {
+    if (b.dataset.list !== 'ol') b.removeAttribute('data-level')
+    else if (levelOf(b) > maxLevel(b)) setLevel(b, maxLevel(b))
+  }
+}
 
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
@@ -270,6 +290,7 @@ export function sanitize(html: string) {
       if (el.tagName === 'DIV') {
         const div = document.createElement('div')
         if (el.dataset.list === 'ol') div.dataset.list = 'ol'
+        if (div.dataset.list && LEVELS.includes(el.dataset.level ?? '')) div.dataset.level = el.dataset.level
         // Вирівнювання рядка: лише по центру чи праворуч (ліворуч — типове)
         if (ALIGNS.includes(el.style.textAlign as Align)) div.style.textAlign = el.style.textAlign
         walk(el, div)
@@ -322,8 +343,10 @@ export function blocksIn(editor: HTMLElement, range: Range) {
 export function toggleNumbering(blocks: HTMLElement[]) {
   const all = blocks.every((b) => b.dataset.list === 'ol')
   blocks.forEach((b) => {
-    if (all) b.removeAttribute('data-list')
-    else b.dataset.list = 'ol'
+    if (all) {
+      b.removeAttribute('data-list')
+      b.removeAttribute('data-level')
+    } else b.dataset.list = 'ol'
   })
   return !all
 }
@@ -418,14 +441,29 @@ export function applyStyles(editor: HTMLElement, range: Range, styles: Styles) {
   return next
 }
 
+/**
+ * Перша буква виділення. Виділення мишкою часто починається в кінці попереднього вузла
+ * (пробіл перед словом) — тоді стиль треба брати не звідти, а з першого видимого символу.
+ */
+function firstText(range: Range): Node {
+  const start = range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer.childNodes[range.startOffset] ?? range.startContainer : range.startContainer
+  if (range.collapsed) return start
+  const root = range.commonAncestorContainer
+  const walker = document.createTreeWalker(root.nodeType === Node.TEXT_NODE ? root.parentNode ?? root : root, NodeFilter.SHOW_TEXT)
+  while (walker.nextNode()) {
+    const t = walker.currentNode as Text
+    if (!range.intersectsNode(t)) continue
+    const from = t === range.startContainer ? range.startOffset : 0
+    const to = t === range.endContainer ? range.endOffset : t.length
+    if (t.data.slice(from, to).trim()) return t
+  }
+  return start
+}
+
 /** Стилі, записані в тексті на початку діапазону (не обчислені): для пензлика і позначок у меню */
 export function ownStyles(editor: HTMLElement, range: Range): Record<StyleProp, string> {
   const out = Object.fromEntries(STYLE_PROPS.map((p) => [p, ''])) as Record<StyleProp, string>
-  let n: Node | null =
-    range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer.childNodes[range.startOffset] ?? range.startContainer : range.startContainer
-  // Межа «перед спаном» — беремо перший текст усередині
-  while (n && n.nodeType === Node.ELEMENT_NODE && n.firstChild && (n as HTMLElement).tagName === 'SPAN' && !range.collapsed) n = n.firstChild
-  for (; n && n !== editor; n = n.parentNode) {
+  for (let n: Node | null = firstText(range); n && n !== editor; n = n.parentNode) {
     if (n.nodeType !== Node.ELEMENT_NODE || (n as HTMLElement).tagName !== 'SPAN') continue
     for (const p of STYLE_PROPS) out[p] ||= (n as HTMLElement).style.getPropertyValue(p)
   }
@@ -487,16 +525,22 @@ export function plainText(editor: HTMLElement, range?: Range) {
     if (el.tagName === 'BR') return ''
     return Array.from(el.childNodes).map(textOf).join('')
   }
-  let number = 0
+  // Ті самі лічильники, що й у CSS: [1-й рівень, 2-й, 3-й]
+  const count = [0, 0, 0]
   const lines: string[] = []
   for (const node of Array.from(editor.childNodes)) {
     const numbered = node instanceof HTMLElement && node.tagName === 'DIV' && node.dataset.list === 'ol'
-    number = numbered ? number + 1 : 0
+    const level = numbered ? levelOf(node) : 0
+    if (!numbered) count.fill(0)
+    else {
+      count[level - 1]++
+      count.fill(0, level)
+    }
     if (range && (!range.intersectsNode(node) || range.collapsed)) continue
     const sub = range ? rangeIn(node, range) : null
     if (sub?.collapsed) continue
     const text = textOf(sub ? sub.cloneContents() : node)
-    lines.push(numbered ? `${number}. ${text}` : text)
+    lines.push(numbered ? `${count.slice(0, level).join('.')}. ${text}` : text)
   }
   return lines.join('\n').replace(/\s+$/, '')
 }
@@ -510,7 +554,7 @@ export function htmlToText(html: string) {
 
 /** Поточний стиль на початку виділення — для показу в меню */
 export function styleAt(range: Range) {
-  const node = range.startContainer
+  const node = firstText(range)
   const el = (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement) as HTMLElement | null
   if (!el) return { font: 'Inter', size: BASE_SIZE, weight: 500 }
   const cs = getComputedStyle(el)

@@ -1,16 +1,30 @@
-/* Номери існують лише в оформленні; кожна окрема послідовність починається з 1. */
+/* Номери існують лише в оформленні; кожна окрема послідовність починається з 1.
+   Підрівні (data-level 2–3) рахують 1.1, 1.2, 1.1.1 — новий пункт рівнем вище обнуляє глибші. */
 .note-editor {
-  counter-reset: note-list;
+  counter-reset: note-list note-l2 note-l3;
 }
 
 .note-editor > div[data-list='ol'] {
   position: relative;
   padding-inline-start: 2.75em;
   counter-increment: note-list;
+  counter-set: note-l2 0 note-l3 0;
+}
+
+.note-editor > div[data-list='ol'][data-level='2'] {
+  padding-inline-start: 5.35em;
+  counter-increment: note-l2;
+  counter-set: note-l3 0;
+}
+
+.note-editor > div[data-list='ol'][data-level='3'] {
+  padding-inline-start: 8.35em;
+  counter-increment: note-l3;
+  counter-set: none;
 }
 
 .note-editor > :not(div[data-list='ol']) {
-  counter-set: note-list 0;
+  counter-set: note-list 0 note-l2 0 note-l3 0;
 }
 
 .note-editor > div[data-list='ol']::before {
@@ -25,4 +39,15 @@
   white-space: nowrap;
   pointer-events: none;
   user-select: none;
+}
+
+/* Номер підпункту стоїть під текстом пункту рівнем вище, як у Word */
+.note-editor > div[data-list='ol'][data-level='2']::before {
+  content: counter(note-list) '.' counter(note-l2) '.';
+  inset-inline-end: calc(100% - 4.75em);
+}
+
+.note-editor > div[data-list='ol'][data-level='3']::before {
+  content: counter(note-list) '.' counter(note-l2) '.' counter(note-l3) '.';
+  inset-inline-end: calc(100% - 7.75em);
 }

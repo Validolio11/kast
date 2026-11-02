@@ -28,10 +28,14 @@ import {
   inBrowser,
   inOwnWindow,
   makeVideo,
+  levelOf,
+  maxLevel,
+  normalizeLevels,
   parseVideo,
   plainText,
   sanitize,
   serialize,
+  setLevel,
   styleAt,
   TEXT_COLORS,
   toggleNumbering,
@@ -131,6 +135,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
     const e = editor.current
     if (!e) return
     if (!e.firstChild || e.innerHTML === '<br>') e.innerHTML = '<div><br></div>'
+    normalizeLevels(e)
     // Фокус і blur без змін не зберігаємо — інакше нотатка «оновлюється» і стрибає вгору списку
     const out = serialize(e)
     if (out === lastHtml.current) return
@@ -341,6 +346,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
     if (!title) return
     await onLineToTask(title)
     block.removeAttribute('data-list')
+    block.removeAttribute('data-level')
     block.textContent = SENT_MARK + title
     if (addLine) {
       const next = document.createElement('div')
@@ -418,6 +424,8 @@ export const RichNote = forwardRef<RichNoteHandle, {
       return
     }
     if (readOnly || e.nativeEvent.isComposing) return
+    // Tab — підпункт (1.1), Shift+Tab — рівень вище; поза нумерацією Tab працює як завжди
+    if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey && shiftLevel(selectedBlocks(), e.shiftKey ? -1 : 1)) return e.preventDefault()
     if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key === ' ' && listKey(' ')) return e.preventDefault()
     if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key === 'Backspace' && listKey('Backspace')) return e.preventDefault()
     if (e.key === ' ' && linkifyBeforeCaret(true)) return e.preventDefault()
@@ -452,6 +460,21 @@ export const RichNote = forwardRef<RichNoteHandle, {
     if (!e.metaKey && !e.altKey && listKey('Enter')) e.preventDefault()
   }
 
+  /** Рядки під курсором чи у виділенні */
+  const selectedBlocks = () => {
+    const sel = getSelection()
+    if (!sel?.rangeCount || !el().contains(sel.anchorNode)) return []
+    return blocksIn(el(), sel.getRangeAt(0))
+  }
+  /** Підпункт / рівень вище для пронумерованих рядків; false — нумерованих серед них немає */
+  const shiftLevel = (blocks: HTMLElement[], d: 1 | -1) => {
+    const list = blocks.filter((b) => b.dataset.list === 'ol')
+    if (!list.length) return false
+    for (const b of list) setLevel(b, Math.max(1, Math.min(maxLevel(b), levelOf(b) + d)))
+    emit()
+    return true
+  }
+
   /** Маркер — властивість рядка: Enter продовжує список, Backspace на початку знімає її. */
   const listKey = (key: ' ' | 'Enter' | 'Backspace') => {
     const sel = getSelection()
@@ -470,24 +493,32 @@ export const RichNote = forwardRef<RichNoteHandle, {
     before.setEnd(caret.startContainer, caret.startOffset)
     const hasContent = (node: ParentNode) => !!node.textContent?.trim() || !!node.querySelector('.note-chip, .note-img')
     if (key === ' ') {
-      if (block.dataset.list === 'ol' || !/^1[.)]$/.test(before.toString()) || block.textContent !== before.toString() || block.querySelector('.note-chip, .note-img, div')) return false
+      const typed = before.toString()
+      // «1.» — пункт, «1.1» — підпункт, «1.1.1» — третій рівень (одразу під пунктом, що стоїть вище)
+      const level = /^1[.)]$/.test(typed) ? 1 : /^\d+\.1\.?$/.test(typed) ? 2 : /^\d+\.\d+\.1\.?$/.test(typed) ? 3 : 0
+      if (!level || block.dataset.list === 'ol' || block.textContent !== typed || block.querySelector('.note-chip, .note-img, div')) return false
+      if (level > maxLevel(block)) return false
       before.deleteContents()
       block.dataset.list = 'ol'
+      setLevel(block, level)
       if (!block.querySelector('br')) block.appendChild(document.createElement('br'))
       caret.setStart(block, 0)
     } else {
       if (block.dataset.list !== 'ol') return false
       if (key === 'Backspace') {
         if (before.toString() || before.cloneContents().querySelector('br, .note-chip, .note-img')) return false
-        block.removeAttribute('data-list')
+        if (levelOf(block) > 1) setLevel(block, levelOf(block) - 1)
+        else block.removeAttribute('data-list')
       } else if (!hasContent(block)) {
-        block.removeAttribute('data-list')
+        if (levelOf(block) > 1) setLevel(block, levelOf(block) - 1)
+        else block.removeAttribute('data-list')
       } else {
         const tail = document.createRange()
         tail.selectNodeContents(block)
         tail.setStart(caret.startContainer, caret.startOffset)
         const next = document.createElement('div')
         next.dataset.list = 'ol'
+        setLevel(next, levelOf(block))
         next.style.textAlign = block.style.textAlign
         next.appendChild(tail.extractContents())
         if (!hasContent(next) && !next.querySelector('br')) {
@@ -823,6 +854,25 @@ export const RichNote = forwardRef<RichNoteHandle, {
             ]),
       ]
     : []
+  /** «Підпункт» і «Рівень вище» — тільки коли рядок під курсором уже в нумерації */
+  const levelItems = (): MenuAction[] => {
+    // Список пунктів будується на кожному рендері — до появи редактора й без меню рахувати нічого
+    if (!menu || !editor.current) return []
+    const range = menu.range
+    const blocks = (range ? blocksIn(el(), range) : [currentBlock()]).filter((b): b is HTMLElement => b?.dataset.list === 'ol')
+    if (!blocks.length) return []
+    const act = (d: 1 | -1) => () => {
+      const before = snapshot()
+      shiftLevel(blocks, d)
+      close()
+      done('', before, true)
+    }
+    return [
+      ...(blocks.some((b) => levelOf(b) < maxLevel(b)) ? [{ label: 'Підпункт · Tab', icon: 'indent', onSelect: act(1) } as MenuAction] : []),
+      ...(blocks.some((b) => levelOf(b) > 1) ? [{ label: 'Рівень вище · Shift+Tab', icon: 'outdent', onSelect: act(-1) } as MenuAction] : []),
+    ]
+  }
+
   const items: MenuAction[] = isVideo
     ? [...videoItems, ...moveItems]
     : imgBox
@@ -885,6 +935,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
             done(on ? 'Нумерацію додано' : 'Нумерацію прибрано', before, true)
           },
         },
+        ...levelItems(),
         {
           label: 'Пензлик формату',
           icon: 'brush',
