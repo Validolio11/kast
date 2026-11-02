@@ -144,10 +144,13 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
   const draft = useRef({ title: split(note.body)[0], pages: pagesOf(note), texts: pagesOf(note).map(htmlToText) })
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const pending = useRef(false)
+  /** Текст нотатки в базі, з якого почалися ваші правки: якщо до збереження він змінився — це зробив хтось інший */
+  const base = useRef(note.body)
 
   // Зміни ззовні (синхронізація, швидкий запис) підхоплюємо, якщо ви зараз не друкуєте
   useEffect(() => {
     if (pending.current) return
+    base.current = note.body
     const next = pagesOf(note)
     draft.current = { title: split(note.body)[0], pages: next, texts: next.map(htmlToText) }
     setTitle(draft.current.title)
@@ -159,12 +162,61 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
   const flush = () => {
     clearTimeout(saveTimer.current)
     if (!pending.current) return
-    const { title: t, pages: all, texts } = draft.current
+    pending.current = false
+    save().catch((e) => {
+      console.error('note save failed', e)
+      toast({ kind: 'error', title: 'Не вдалося зберегти нотатку', text: 'Спробуйте ще раз' })
+    })
+  }
+
+  /**
+   * Поки ви друкували, нотатку могли змінити ззовні: швидкий запис, інший пристрій.
+   * Дописане в кінець — додаємо до вашого тексту; інші зміни — зберігаємо окремою копією, а не затираємо.
+   */
+  const save = async () => {
+    let { pages: all, texts } = draft.current
+    const t = draft.current.title
+    const cur = await db.notes.get(note.id)
+    const from = base.current.trimEnd()
+    if (cur && !cur.deleted && cur.body !== base.current) {
+      if (cur.body.startsWith(from)) {
+        const added = cur.body.slice(from.length).split('\n').filter((l) => l.trim())
+        if (added.length) {
+          const rows = added.map((l) => `<div>${l.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</div>`).join('')
+          all = [...all]
+          all[all.length - 1] += rows
+          texts = all.map(htmlToText)
+          draft.current = { ...draft.current, pages: all, texts }
+          setPages(all)
+          // Відкрита остання сторінка — рядки з'являються в редакторі одразу
+          if (pageRef.current === all.length - 1) editorRef.current?.appendHtml(rows)
+        }
+      } else {
+        await createNote(`${noteTitle(cur.body)} (з іншого пристрою)\n${cur.body.split('\n').slice(1).join('\n')}`, {
+          html: cur.html,
+          pages: cur.pages,
+          icon: cur.icon,
+        })
+        toast({ kind: 'info', title: 'Нотатку змінили на іншому пристрої', text: 'Ту версію збережено окремою нотаткою' })
+      }
+    }
     // Простий текст — усі сторінки підряд: пошук і прев'ю бачать увесь зміст
     const rest = texts.filter((x) => x.trim()).join('\n')
-    updateNote(note.id, { body: rest ? `${t}\n${rest}` : t, html: all[0], pages: all })
-    pending.current = false
+    const body = rest ? `${t}\n${rest}` : t
+    base.current = body
+    await updateNote(note.id, { body, html: all[0], pages: all })
   }
+
+  // Згорнули застосунок чи закрили вікно — не чекаємо таймера: на телефоні процес можуть зупинити одразу
+  useEffect(() => {
+    const now = () => document.visibilityState === 'hidden' && flush()
+    document.addEventListener('visibilitychange', now)
+    window.addEventListener('pagehide', flush)
+    return () => {
+      document.removeEventListener('visibilitychange', now)
+      window.removeEventListener('pagehide', flush)
+    }
+  })
   useEffect(
     () => () => {
       flush()

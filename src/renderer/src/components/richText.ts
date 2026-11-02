@@ -294,8 +294,6 @@ export function sanitize(html: string) {
         // Вирівнювання рядка: лише по центру чи праворуч (ліворуч — типове)
         if (ALIGNS.includes(el.style.textAlign as Align)) div.style.textAlign = el.style.textAlign
         walk(el, div)
-        // Старі нотатки мали номер у тексті; готові списки повторно не мігруємо.
-        if (!div.dataset.list && stripNumber(div)) div.dataset.list = 'ol'
         return void to.appendChild(div)
       }
       if (el.tagName === 'SPAN' && el.getAttribute('style')) {
@@ -311,7 +309,31 @@ export function sanitize(html: string) {
     })
   }
   walk(doc.body, out)
+  migrateTypedNumbers(out)
   return out.innerHTML || '<div><br></div>'
+}
+
+/**
+ * Старі нотатки (до справжньої нумерації) мали номер прямо в тексті: «1. …», «2. …».
+ * Перетворюємо лише послідовність від 1 щонайменше з двох рядків і лише в нотатці без нумерації взагалі:
+ * рядок «2024. Рік підсумків» чи одиночне «1) варіант» лишаються такими, як їх набрали.
+ */
+function migrateTypedNumbers(root: HTMLElement) {
+  if (root.querySelector('[data-list]')) return
+  let run: HTMLElement[] = []
+  const finish = () => {
+    if (run.length >= 2) for (const div of run) if (stripNumber(div)) div.dataset.list = 'ol'
+    run = []
+  }
+  for (const node of Array.from(root.children) as HTMLElement[]) {
+    const n = node.tagName === 'DIV' ? Number((node.textContent ?? '').match(/^(\d+)[.)]\s/)?.[1]) : NaN
+    if (n === run.length + 1) run.push(node)
+    else {
+      finish()
+      if (n === 1) run.push(node)
+    }
+  }
+  finish()
 }
 
 /** Рядок (блок) верхнього рівня, у якому лежить вузол; голий текст угорі загортаємо в <div> */

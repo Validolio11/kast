@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppHeader, RoundButton, SyncDot, ToastProvider, UpdatePill, useToast, WindowControls, type NavTab } from '@/design-system'
+import { AppHeader, Button, Modal, RoundButton, SyncDot, ToastProvider, UpdatePill, useToast, WindowControls, type NavTab } from '@/design-system'
 import { useDay, useStatus, useToday } from '@/data/hooks'
 import { activateRepeats, rolloverLeftovers, sweepStale } from '@/data/tasks'
 import { markLegacyQuickNote } from '@/data/notes'
 import { CloseDay } from '@/flows/CloseDay'
 import { Focus } from '@/flows/Focus'
 import { installUpdate, useDayKey, useHour, useSettings, useUpdateState } from '@/lib/hooks'
-import { startSync, useSync } from '@/sync/engine'
+import { afterFirstPull, resolveAccountSwitch, startSync, upToDate, useSync } from '@/sync/engine'
+import { cleanupFiles } from '@/data/files'
 import { startAndroidUpdates } from '@/lib/androidUpdate'
 import { Done } from '@/views/Done'
 import { Inbox } from '@/views/Inbox'
@@ -16,6 +17,36 @@ import { Today } from '@/views/Today'
 
 type Tab = 'today' | 'notebook' | 'inbox' | 'done'
 const TABS: Tab[] = ['today', 'inbox', 'done', 'notebook']
+
+/**
+ * Вхід в інший акаунт, коли на пристрої дані попереднього: людина вирішує, куди їх подіти.
+ * Поки вікно відкрите, синхронізація стоїть — нічого чужого в новий акаунт не потрапить.
+ */
+function AccountSwitch({ switching, email }: { switching: { from: string | null; unsynced: number } | null; email: string | null }) {
+  const from = switching?.from ? `акаунта ${switching.from}` : 'попереднього акаунта'
+  const lost = switching?.unsynced ? ` ${switching.unsynced} змін ще не встигли синхронізуватись — якщо прибрати, вони зникнуть.` : ''
+  return (
+    <Modal
+      open={!!switching}
+      onClose={() => resolveAccountSwitch('cancel')}
+      size="sm"
+      title="Дані іншого акаунта"
+      description={`На цьому пристрої задачі й нотатки з ${from}. Ви увійшли як ${email ?? 'інший користувач'}.${lost}`}
+      footer={
+        <>
+          <Button variant="steel" onClick={() => resolveAccountSwitch('clear')}>
+            Прибрати з пристрою
+          </Button>
+          <Button variant="paper" onClick={() => resolveAccountSwitch('move')} data-autofocus>
+            Перенести сюди
+          </Button>
+        </>
+      }
+    >
+      <p className="pb-2 text-[14px] font-semibold text-muted">Прибрані дані лишаються в хмарі попереднього акаунта. Закрийте вікно, щоб вийти з нового акаунта.</p>
+    </Modal>
+  )
+}
 
 export default function App() {
   return (
@@ -51,15 +82,23 @@ function Shell() {
     return window.kast.window.onMaximized(setMaximized)
   }, [])
 
-  // Новий день (при старті й опівночі): незакрите з минулих днів повертається у Вхідні
+  // Новий день (при старті й опівночі): незакрите з минулих днів повертається у Вхідні.
+  // Спершу чекаємо зміни з хмари: інакше вчорашній стан цього ПК перезапише закрите на телефоні.
   useEffect(() => {
     // Спершу незакрите з минулих днів, потім повтори, що настали, — так ліміт дня рахується чесно
-    rolloverLeftovers(date).then(() => activateRepeats(date))
+    afterFirstPull()
+      .then(() => rolloverLeftovers(date))
+      .then(() => activateRepeats(date))
+      .catch((e) => console.error('new day failed', e))
   }, [date])
 
   // Тихе старіння Вхідних: при старті й щогодини
   useEffect(() => {
     markLegacyQuickNote()
+    // Фото, яких давно немає в жодній нотатці, — лише коли пристрій бачить усе з хмари
+    afterFirstPull()
+      .then(() => (upToDate() ? cleanupFiles() : undefined))
+      .catch((e) => console.error('photo cleanup failed', e))
     sweepStale()
     const t = setInterval(sweepStale, 60 * 60_000)
     return () => clearInterval(t)
@@ -185,6 +224,7 @@ function Shell() {
       </main>
       <CloseDay open={closing} onClose={() => setClosing(false)} />
       <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <AccountSwitch switching={sync.switching} email={sync.email} />
     </div>
   )
 }

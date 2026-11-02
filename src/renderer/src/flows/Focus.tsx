@@ -161,6 +161,16 @@ function TaskNotes({ task }: { task: Task }) {
     pending.current = null
   }
   useEffect(() => flush, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Згорнули застосунок — зберігаємо одразу, а не через 400 мс
+  useEffect(() => {
+    const now = () => document.visibilityState === 'hidden' && flush()
+    document.addEventListener('visibilitychange', now)
+    window.addEventListener('pagehide', flush)
+    return () => {
+      document.removeEventListener('visibilitychange', now)
+      window.removeEventListener('pagehide', flush)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const onChange = useCallback((html: string, text: string) => {
     pending.current = { notes: text, notesHtml: html }
     clearTimeout(timer.current)

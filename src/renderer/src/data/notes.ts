@@ -37,7 +37,12 @@ export async function markLegacyQuickNote() {
 }
 
 /** Швидкий запис у блокнот: дописує рядок у закріплену нотатку «Швидкі записи» */
-export async function appendToQuickNote(text: string) {
+export function appendToQuickNote(text: string) {
+  // Читання й запис — одна транзакція: запис з іншого вікна не загубиться між ними
+  return db.transaction('rw', db.notes, db.meta, () => appendNow(text))
+}
+
+async function appendNow(text: string) {
   // Спершу локальна підказка, далі позначка quick — її приносить синхронізація з інших ПК
   const id = await getMeta<string | null>(QUICK_KEY, null)
   let note = id ? await db.notes.get(id) : undefined

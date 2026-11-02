@@ -39,6 +39,26 @@ export async function addImages(owner: string, files: Iterable<Blob>) {
   return added
 }
 
+const FILE_GRACE_MS = 30 * 86_400_000
+
+/**
+ * Фото, прибране з тексту чи з видаленої нотатки, інакше лежало б у базі й у хмарі назавжди.
+ * Позначаємо видаленим (і без самого зображення) лише через 30 днів: «Скасувати» та інші пристрої встигнуть.
+ */
+export async function cleanupFiles() {
+  const cutoff = now() - FILE_GRACE_MS
+  const old = (await db.files.toArray()).filter((f) => !f.deleted && f.updatedAt < cutoff)
+  if (!old.length) return
+  const used = new Set<string>()
+  const scan = (html?: string) => {
+    for (const m of (html ?? '').matchAll(/data-file="([^"]+)"/g)) used.add(m[1])
+  }
+  for (const n of await db.notes.toArray()) if (!n.deleted) [n.html, ...(n.pages ?? [])].forEach(scan)
+  for (const t of await db.tasks.toArray()) if (!t.deleted) scan(t.notesHtml)
+  const t = now()
+  for (const f of old) if (!used.has(f.id)) await db.files.update(f.id, { deleted: 1, data: '', updatedAt: t, dirty: 1 })
+}
+
 /** Зберегти фото на диск: Electron покаже стандартне вікно «Зберегти як» */
 export function downloadImage(file: FileRec, name = 'kast-photo') {
   const ext = file.data.startsWith('data:image/webp') ? 'webp' : 'jpg'
