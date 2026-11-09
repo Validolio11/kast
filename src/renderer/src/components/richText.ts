@@ -46,6 +46,8 @@ export const MARKS = [
 const PALETTE_RE = /^var\(--note-[cm]-[a-z]+\)$/
 const COLOR_PROPS: StyleProp[] = ['color', 'background-color']
 const NUMBER_PREFIX = /^\d+[.)]\s/
+/** Типи блоків рядка (data-block) */
+const BLOCKS = ['h1', 'h2', 'h3', 'todo', 'quote', 'callout', 'divider']
 /** Підрівні нумерації: 2 — 1.1., 3 — 1.1.1. (перший рівень без атрибута) */
 const LEVELS = ['2', '3']
 export const MAX_LEVEL = 3
@@ -289,8 +291,18 @@ export function sanitize(html: string) {
       if (el.classList.contains('note-chip')) return void to.appendChild(makeChip(el.querySelector('.note-chip-text')?.textContent ?? el.textContent ?? ''))
       if (el.tagName === 'DIV') {
         const div = document.createElement('div')
-        if (el.dataset.list === 'ol') div.dataset.list = 'ol'
-        if (div.dataset.list && LEVELS.includes(el.dataset.level ?? '')) div.dataset.level = el.dataset.level
+        if (el.dataset.list === 'ol' || el.dataset.list === 'ul') div.dataset.list = el.dataset.list
+        if (div.dataset.list === 'ol' && LEVELS.includes(el.dataset.level ?? '')) div.dataset.level = el.dataset.level
+        // Тип блока (як у Notion): лише відомі значення; роздільник — порожній і нередагований
+        const kind = el.dataset.block ?? ''
+        if (!div.dataset.list && BLOCKS.includes(kind)) {
+          div.dataset.block = kind
+          if (kind === 'todo' && el.dataset.checked === '1') div.dataset.checked = '1'
+          if (kind === 'divider') {
+            div.contentEditable = 'false'
+            return void to.appendChild(div)
+          }
+        }
         // Вирівнювання рядка: лише по центру чи праворуч (ліворуч — типове)
         if (ALIGNS.includes(el.style.textAlign as Align)) div.style.textAlign = el.style.textAlign
         walk(el, div)
@@ -368,7 +380,11 @@ export function toggleNumbering(blocks: HTMLElement[]) {
     if (all) {
       b.removeAttribute('data-list')
       b.removeAttribute('data-level')
-    } else b.dataset.list = 'ol'
+    } else {
+      b.dataset.list = 'ol'
+      b.removeAttribute('data-block')
+      b.removeAttribute('data-checked')
+    }
   })
   return !all
 }
@@ -562,7 +578,10 @@ export function plainText(editor: HTMLElement, range?: Range) {
     const sub = range ? rangeIn(node, range) : null
     if (sub?.collapsed) continue
     const text = textOf(sub ? sub.cloneContents() : node)
-    lines.push(numbered ? `${count.slice(0, level).join('.')}. ${text}` : text)
+    // Маркери списку й чекбокса — і в копіюванні, і в пошуку
+    const el = node instanceof HTMLElement ? node : null
+    const mark = el?.dataset.list === 'ul' ? '• ' : el?.dataset.block === 'todo' ? (el.dataset.checked === '1' ? '☑ ' : '☐ ') : ''
+    lines.push(numbered ? `${count.slice(0, level).join('.')}. ${text}` : mark + text)
   }
   return lines.join('\n').replace(/\s+$/, '')
 }

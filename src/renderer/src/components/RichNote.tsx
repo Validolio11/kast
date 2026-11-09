@@ -8,6 +8,9 @@ import { VideoViewer, Viewer } from './Attachments'
 import { adjacentMediaPoint, MEDIA_DRAG_TYPE, mediaDropPoint, moveMedia, type MediaDropPoint } from './mediaMove'
 import './noteMedia.css'
 import './noteLists.css'
+import './noteBlocks.css'
+import { SlashMenu } from './SlashMenu'
+import { clearKind, hasContent, keepLine, kindOf, matchBlocks, setBlock, textRange, type BlockItem, type BlockKind } from './noteBlocks'
 import {
   alignBlocks,
   alignOf,
@@ -103,6 +106,14 @@ export const RichNote = forwardRef<RichNoteHandle, {
   const found = useRef<Range[]>([])
   const findInput = useRef<HTMLInputElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
+  /** Меню «/»: де показати, що набрано після «/», вибраний пункт; turn — «Перетворити на» з ручки рядка */
+  const [slash, setSlash] = useState<{ x: number; y: number; query: string; index: number; turn?: HTMLElement } | null>(null)
+  /** Esc закрив меню — не відкривати знову, доки «/» не наберуть наново */
+  const slashOff = useRef(false)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [hover, setHover] = useState<{ block: HTMLElement; top: number } | null>(null)
+  const [drop, setDrop] = useState<number | null>(null)
+  const drag = useRef<{ block: HTMLElement; startY: number; moved: boolean; target: HTMLElement | null } | null>(null)
   const clearExtra = () => {
     if (!extra.current.length) return
     extra.current = []
@@ -421,6 +432,25 @@ export const RichNote = forwardRef<RichNoteHandle, {
   }
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (slash) {
+      const list = matchBlocks(slash.query, !!imageOwner)
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (!list.length) return
+        e.preventDefault()
+        const d = e.key === 'ArrowDown' ? 1 : -1
+        return setSlash({ ...slash, index: (slash.index + d + list.length) % list.length })
+      }
+      if ((e.key === 'Enter' || e.key === 'Tab') && list.length) {
+        e.preventDefault()
+        return pickBlock(list[Math.min(slash.index, list.length - 1)])
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        slashOff.current = true
+        return setSlash(null)
+      }
+    }
     if (e.key === 'Escape' && extra.current.length) {
       e.preventDefault()
       e.stopPropagation()
@@ -504,7 +534,10 @@ export const RichNote = forwardRef<RichNoteHandle, {
     return changed
   }
 
-  /** Маркер — властивість рядка: Enter продовжує список, Backspace на початку знімає її. */
+  /**
+   * Тип рядка, як у Notion: Enter продовжує список чи чекбокс (після заголовка, цитати — звичайний рядок),
+   * Enter на порожньому чи Backspace на початку знімає тип; пробіл після «#», «-», «>» чи «1.» — ставить.
+   */
   const listKey = (key: ' ' | 'Enter' | 'Backspace') => {
     const sel = getSelection()
     if (!sel?.isCollapsed || !sel.rangeCount || !el().contains(sel.anchorNode)) return false
@@ -520,34 +553,42 @@ export const RichNote = forwardRef<RichNoteHandle, {
     const before = document.createRange()
     before.selectNodeContents(block)
     before.setEnd(caret.startContainer, caret.startOffset)
-    const hasContent = (node: ParentNode) => !!node.textContent?.trim() || !!node.querySelector('.note-chip, .note-img')
     if (key === ' ') {
       const typed = before.toString()
+      if (kindOf(block) !== 'text' || block.textContent !== typed || block.querySelector('.note-chip, .note-img, div')) return false
+      const md = ({ '#': 'h1', '##': 'h2', '###': 'h3', '-': 'ul', '*': 'ul', '>': 'quote' } as Record<string, BlockKind>)[typed]
       // «1.» — пункт, «1.1» — підпункт, «1.1.1» — третій рівень (одразу під пунктом, що стоїть вище)
       const level = /^1[.)]$/.test(typed) ? 1 : /^\d+\.1\.?$/.test(typed) ? 2 : /^\d+\.\d+\.1\.?$/.test(typed) ? 3 : 0
-      if (!level || block.dataset.list === 'ol' || block.textContent !== typed || block.querySelector('.note-chip, .note-img, div')) return false
-      if (level > maxLevel(block)) return false
-      before.deleteContents()
-      block.dataset.list = 'ol'
-      setLevel(block, level)
-      if (!block.querySelector('br')) block.appendChild(document.createElement('br'))
+      if (md) {
+        before.deleteContents()
+        setBlock(block, md)
+      } else {
+        if (!level || level > maxLevel(block)) return false
+        before.deleteContents()
+        block.dataset.list = 'ol'
+        setLevel(block, level)
+        if (!block.querySelector('br')) block.appendChild(document.createElement('br'))
+      }
       caret.setStart(block, 0)
     } else {
-      if (block.dataset.list !== 'ol') return false
+      const kind = kindOf(block)
+      if (kind === 'text' || kind === 'divider') return false
       if (key === 'Backspace') {
         if (before.toString() || before.cloneContents().querySelector('br, .note-chip, .note-img')) return false
-        if (levelOf(block) > 1) setLevel(block, levelOf(block) - 1)
-        else block.removeAttribute('data-list')
+        if (kind === 'ol' && levelOf(block) > 1) setLevel(block, levelOf(block) - 1)
+        else clearKind(block)
       } else if (!hasContent(block)) {
-        if (levelOf(block) > 1) setLevel(block, levelOf(block) - 1)
-        else block.removeAttribute('data-list')
+        if (kind === 'ol' && levelOf(block) > 1) setLevel(block, levelOf(block) - 1)
+        else clearKind(block)
       } else {
         const tail = document.createRange()
         tail.selectNodeContents(block)
         tail.setStart(caret.startContainer, caret.startOffset)
         const next = document.createElement('div')
-        next.dataset.list = 'ol'
-        setLevel(next, levelOf(block))
+        // Список і чекбокс продовжуються; після заголовка, цитати й виноски — звичайний текст
+        if (kind === 'ol' || kind === 'ul') next.dataset.list = kind
+        if (kind === 'ol') setLevel(next, levelOf(block))
+        if (kind === 'todo') next.dataset.block = 'todo'
         next.style.textAlign = block.style.textAlign
         next.appendChild(tail.extractContents())
         if (!hasContent(next) && !next.querySelector('br')) {
@@ -567,6 +608,145 @@ export const RichNote = forwardRef<RichNoteHandle, {
     select(caret)
     emit()
     return true
+  }
+
+  /* ───────── Блоки й меню «/» ───────── */
+
+  /** Курсор у кінець (чи на початок) рядка */
+  const caretTo = (block: HTMLElement, atEnd: boolean) => {
+    const r = document.createRange()
+    if (!hasContent(block)) r.setStart(block, 0)
+    else {
+      r.selectNodeContents(block)
+      r.collapse(!atEnd)
+    }
+    select(r)
+  }
+
+  /** Після введення: «/» на початку рядка чи після пробілу відкриває меню, далі набране — пошук */
+  const updateSlash = () => {
+    if (readOnly) return setSlash(null)
+    const sel = getSelection()
+    const block = currentBlock()
+    if (!sel?.isCollapsed || !sel.rangeCount || !block || kindOf(block) === 'divider') return setSlash(null)
+    const caret = sel.getRangeAt(0)
+    const before = document.createRange()
+    before.selectNodeContents(block)
+    before.setEnd(caret.startContainer, caret.startOffset)
+    const m = before.toString().match(/(?:^|\s)\/([^\s/]{0,24})$/)
+    if (!m) {
+      slashOff.current = false
+      return setSlash(null)
+    }
+    if (slashOff.current) return
+    let rect = caret.getBoundingClientRect()
+    if (!rect.height) rect = block.getBoundingClientRect()
+    setSlash((s) => ({ x: rect.left - 8, y: rect.top + Math.min(rect.height, 30) + 6, query: m[1], index: s && !s.turn && s.query === m[1] ? s.index : 0 }))
+  }
+
+  /** Вибір у меню: прибрати набране «/…» і змінити тип рядка (або вставити фото, створити задачу) */
+  const pickBlock = (item: BlockItem) => {
+    const s = slash
+    setSlash(null)
+    if (!s || readOnly) return
+    const block = s.turn ?? currentBlock()
+    if (!block || !el().contains(block)) return
+    if (!s.turn) {
+      const sel = getSelection()
+      if (sel?.rangeCount) {
+        const caret = sel.getRangeAt(0)
+        const before = document.createRange()
+        before.selectNodeContents(block)
+        before.setEnd(caret.startContainer, caret.startOffset)
+        const text = before.toString()
+        const at = text.lastIndexOf('/')
+        if (at >= 0) textRange(block, at, text.length)?.deleteContents()
+        keepLine(block)
+      }
+    }
+    el().focus()
+    if (item.kind === 'image') {
+      caretTo(block, true)
+      emit()
+      return fileInput.current?.click()
+    }
+    if (item.kind === 'task') {
+      emit()
+      return void convert(block, false)
+    }
+    caretTo(setBlock(block, item.kind), true)
+    emit()
+  }
+
+  /* Ручка ⋮⋮: з'являється біля рядка під мишею; перетягнути — перемістити рядок, клік — «Перетворити на» */
+  const blockAt = (clientY: number) => {
+    for (const b of Array.from(el().children) as HTMLElement[]) {
+      const r = b.getBoundingClientRect()
+      if (clientY >= r.top - 4 && clientY <= r.bottom + 4) return b
+    }
+    return null
+  }
+  const handleTop = (b: HTMLElement) => {
+    const box = scroller.current!
+    const r = b.getBoundingClientRect()
+    const top = r.top - box.getBoundingClientRect().top + box.scrollTop
+    if (b.dataset.block === 'divider') return top + r.height / 2 - 12
+    const cs = getComputedStyle(b)
+    const line = parseFloat(cs.lineHeight) || 27
+    return top + (parseFloat(cs.paddingTop) || 0) + line / 2 - 12
+  }
+  const onHover = (e: React.MouseEvent) => {
+    if (readOnly || drag.current || !editor.current) return
+    const b = blockAt(e.clientY)
+    if (b === hover?.block) return
+    setHover(b ? { block: b, top: handleTop(b) } : null)
+  }
+  const onHandleDown = (e: React.PointerEvent) => {
+    if (!hover) return
+    e.preventDefault()
+    drag.current = { block: hover.block, startY: e.clientY, moved: false, target: null }
+    const move = (ev: PointerEvent) => {
+      const d = drag.current
+      const box = scroller.current
+      if (!d || !box) return
+      if (!d.moved && Math.abs(ev.clientY - d.startY) < 4) return
+      d.moved = true
+      const s = box.getBoundingClientRect()
+      const kids = (Array.from(el().children) as HTMLElement[]).filter((k) => k !== d.block)
+      d.target = kids.find((k) => {
+        const r = k.getBoundingClientRect()
+        return ev.clientY < r.top + r.height / 2
+      }) ?? null
+      const last = kids[kids.length - 1]
+      const y = d.target ? d.target.getBoundingClientRect().top - 3 : last ? last.getBoundingClientRect().bottom + 1 : s.top
+      setDrop(y - s.top + box.scrollTop)
+      // Біля країв — прокручуємо, щоб можна було перенести далеко
+      if (ev.clientY < s.top + 32) box.scrollTop -= 12
+      else if (ev.clientY > s.bottom - 32) box.scrollTop += 12
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      const d = drag.current
+      drag.current = null
+      setDrop(null)
+      if (!d || !el().contains(d.block)) return
+      if (!d.moved) {
+        const r = d.block.getBoundingClientRect()
+        el().focus()
+        caretTo(d.block, true)
+        slashOff.current = false
+        return setSlash({ x: r.left - 8, y: r.top + Math.min(r.height, 36) + 6, query: '', index: 0, turn: d.block })
+      }
+      if ((d.target ?? null) !== (d.block.nextElementSibling ?? null)) {
+        if (d.target) el().insertBefore(d.block, d.target)
+        else el().appendChild(d.block)
+        emit()
+      }
+      setHover(null)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
   }
 
   // Мобільна клавіатура надсилає пробіл через beforeinput, без звичайного keydown.
@@ -733,6 +913,15 @@ export const RichNote = forwardRef<RichNoteHandle, {
   const onClick = async (e: React.MouseEvent) => {
     // Клік по фото — перегляд у повному розмірі
     const target = e.target as HTMLElement
+    // Квадратик чекбокса — ліві 30 px рядка: ставить і знімає галочку
+    const todo = target.closest('[data-block="todo"]') as HTMLElement | null
+    if (todo && todo.parentElement === editor.current && !readOnly && e.clientX - todo.getBoundingClientRect().left < 30) {
+      e.preventDefault()
+      if (todo.dataset.checked) todo.removeAttribute('data-checked')
+      else todo.dataset.checked = '1'
+      emit()
+      return
+    }
     const handle = target.closest('.note-media-drag')
     if (handle || performance.now() < suppressMediaClickUntil.current) {
       e.preventDefault()
@@ -1128,7 +1317,11 @@ export const RichNote = forwardRef<RichNoteHandle, {
       {/* Текст і галерея фото гортаються разом; клік у порожнє місце під текстом ставить курсор у кінець */}
       <div
         ref={scroller}
-        className="min-h-0 flex-1 overflow-y-auto"
+        onMouseMove={onHover}
+        onMouseLeave={() => !drag.current && setHover(null)}
+        onScroll={() => slash && setSlash(null)}
+        // Ліве поле під ручку ⋮⋮ (на телефоні ручки немає — і поля теж)
+        className="relative -ml-7 min-h-0 flex-1 overflow-y-auto pl-7 max-[640px]:ml-0 max-[640px]:pl-0"
         onMouseDown={(e) => {
           if (e.target !== e.currentTarget || readOnly) return
           e.preventDefault()
@@ -1164,11 +1357,19 @@ export const RichNote = forwardRef<RichNoteHandle, {
           data-empty={(empty && !readOnly) || undefined}
           onInput={() => {
             clearExtra()
+            // «---» у порожньому рядку — роздільник, як у Notion
+            const line = currentBlock()
+            if (line && kindOf(line) === 'text' && line.textContent === '---' && !line.querySelector('.note-chip, .note-img')) {
+              line.textContent = ''
+              caretTo(setBlock(line, 'divider'), true)
+            }
             emit()
+            updateSlash()
             if (find !== null) runFind(find, hit.i, false)
           }}
           onMouseUp={() => painter && requestAnimationFrame(paintSelection)}
           onMouseDown={(e) => {
+            if (slash) setSlash(null)
             if (e.button !== 0) return
             // Ctrl + виділення додає ще один шматок (як у Word); звичайний клік — починає наново
             if (e.ctrlKey || e.metaKey) {
@@ -1189,7 +1390,43 @@ export const RichNote = forwardRef<RichNoteHandle, {
           onBlur={emit}
           className="note-editor min-h-full w-full text-[17px] leading-[1.6] font-medium text-ink outline-none"
         />
+        {hover && !readOnly && (
+          <button
+            type="button"
+            className="note-block-handle"
+            style={{ top: hover.top }}
+            onPointerDown={onHandleDown}
+            aria-label="Перетягнути рядок або змінити його тип"
+            data-tip="Перетягнути · клік — змінити тип"
+          >
+            <Icon name="grip" size={16} strokeWidth={2.6} />
+          </button>
+        )}
+        {drop !== null && <span aria-hidden className="note-block-drop" style={{ top: drop }} />}
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? [])
+            e.target.value = ''
+            if (files.length) insertImages(files)
+          }}
+        />
       </div>
+      {slash && (
+        <SlashMenu
+          items={matchBlocks(slash.query, !!imageOwner)}
+          index={slash.index}
+          x={slash.x}
+          y={slash.y}
+          title={slash.turn ? 'Перетворити на' : 'Блоки'}
+          onPick={pickBlock}
+          onHover={(index) => setSlash((v) => (v ? { ...v, index } : v))}
+        />
+      )}
       {dropMarker && <span aria-hidden className="note-media-drop-marker" style={dropMarker} />}
       {menu && (
         <ContextMenu
