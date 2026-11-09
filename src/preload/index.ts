@@ -32,6 +32,14 @@ const api: KastApi = {
     open: (url) => ipcRenderer.invoke('auth:open', url),
     cancel: () => ipcRenderer.send('auth:cancel'),
   },
+  gtasks: {
+    status: () => ipcRenderer.invoke('gtasks:status'),
+    connect: () => ipcRenderer.invoke('gtasks:connect'),
+    disconnect: () => ipcRenderer.invoke('gtasks:disconnect'),
+    list: () => ipcRenderer.invoke('gtasks:list'),
+    complete: (listId, taskId) => ipcRenderer.invoke('gtasks:complete', listId, taskId),
+    syncKast: (items) => ipcRenderer.invoke('gtasks:syncKast', items),
+  },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
     toggleMaximize: () => ipcRenderer.send('window:toggleMaximize'),

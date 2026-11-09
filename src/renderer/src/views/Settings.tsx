@@ -5,6 +5,7 @@ import { SyncSection } from '@/sync/SyncSection'
 import { exportBackup, importBackup } from '@/data/backup'
 import type { UpdateState } from '../../../shared/types'
 import { getAppVersion, isDesktop, isNativeMobile, openBackupFile, saveBackupFile } from '@/lib/platform'
+import { connectGTasks, disconnectGTasks, useGTasks } from '@/lib/gtasks'
 
 export function Settings({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [s, set] = useSettings()
@@ -22,6 +23,11 @@ export function Settings({ open, onClose }: { open: boolean; onClose: () => void
             <BackupRow />
             {(isDesktop || isNativeMobile) && <UpdateRow />}
           </Group>
+          {isDesktop && (
+            <Group title="Google">
+              <GoogleTasksRow />
+            </Group>
+          )}
         </div>
         <Group title="Поведінка">
           {isDesktop && (
@@ -93,6 +99,45 @@ function BackupRow() {
           Відновити
         </Button>
       </div>
+    </SettingRow>
+  )
+}
+
+/** Google Tasks: підключити акаунт — і незавершені завдання з'являться в «Сьогодні» */
+function GoogleTasksRow() {
+  const { status, error, loading } = useGTasks()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const connect = async () => {
+    setBusy(true)
+    try {
+      await connectGTasks()
+      toast({ title: 'Google Tasks підключено', text: 'Завдання з датою на сьогодні — у «Сьогодні»' })
+    } catch (e) {
+      const msg = (e as Error).message
+      if (msg !== 'Скасовано') toast({ kind: 'error', title: 'Не вдалося підключити', text: msg })
+    } finally {
+      setBusy(false)
+    }
+  }
+  const text = !status.configured
+    ? 'У цій збірці ще не налаштовано'
+    : status.connected
+      ? error
+        ? `Не вдалося оновити: ${error}`
+        : `${status.email ?? 'Підключено'} · задачі Kast — у списку «Kast»`
+      : 'Завдання з Google — у «Сьогодні»'
+  return (
+    <SettingRow title="Google Tasks" text={text}>
+      {status.connected ? (
+        <Button size="sm" variant="ghost" disabled={busy || loading} onClick={() => disconnectGTasks()}>
+          Відключити
+        </Button>
+      ) : (
+        <Button size="sm" variant="steel" iconLeft="link" loading={busy} disabled={!status.configured} onClick={connect}>
+          Підключити
+        </Button>
+      )}
     </SettingRow>
   )
 }

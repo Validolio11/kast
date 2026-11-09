@@ -24,6 +24,44 @@ export interface AppInfo {
 /** Результат входу через Google: одноразовий код або причина невдачі */
 export type OAuthResult = { code: string; error?: undefined } | { code?: undefined; error: string }
 
+/** Завдання з Google Tasks (лише незавершені) */
+export interface GTask {
+  id: string
+  listId: string
+  /** Назва списку в Google Tasks */
+  list: string
+  title: string
+  notes?: string
+  /** Дата у форматі YYYY-MM-DD — Google зберігає завданням лише дату */
+  due?: string
+  /** Підзавдання іншого завдання */
+  sub: boolean
+}
+
+/** Задача Kast, яку треба мати у списку «Kast» у Google */
+export interface KastSyncItem {
+  id: string
+  title: string
+  notes?: string
+  /** YYYY-MM-DD для задач на сьогодні; у Вхідних дати немає */
+  due?: string
+  done: boolean
+}
+
+/** Зміна, зроблена в Google, яку Kast застосовує в себе */
+export interface KastSyncAction {
+  id: string
+  done?: boolean
+  title?: string
+}
+
+export interface GTasksStatus {
+  /** У збірці є ключі клієнта Google */
+  configured: boolean
+  connected: boolean
+  email?: string
+}
+
 export type NavTarget = 'today' | 'notebook' | 'inbox' | 'done' | 'close-day' | 'settings' | 'update'
 
 export interface KastApi {
@@ -52,6 +90,16 @@ export interface KastApi {
     /** Відкриває сторінку входу в браузері й чекає повернення */
     open(url: string): Promise<OAuthResult>
     cancel(): void
+  }
+  /** Google Tasks: вхід, список незавершених і позначка «виконано» */
+  gtasks: {
+    status(): Promise<GTasksStatus>
+    connect(): Promise<GTasksStatus>
+    disconnect(): Promise<GTasksStatus>
+    list(): Promise<GTask[]>
+    complete(listId: string, taskId: string): Promise<void>
+    /** Звести задачі Kast зі списком «Kast» у Google; повертає зміни з Google */
+    syncKast(items: KastSyncItem[]): Promise<KastSyncAction[]>
   }
   window: {
     minimize(): void

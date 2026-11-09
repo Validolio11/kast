@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { startGoogleSync } from '@/lib/gtasks'
 import { AppHeader, Button, Modal, RoundButton, SyncDot, ToastProvider, UpdatePill, useToast, WindowControls, type NavTab } from '@/design-system'
 import { useDay, useStatus, useToday } from '@/data/hooks'
 import { activateRepeats, rolloverLeftovers, sweepStale } from '@/data/tasks'
@@ -74,6 +75,8 @@ function Shell() {
   useEffect(() => {
     startSync()
     startAndroidUpdates()
+    // Задачі Kast → список «Kast» у Google Tasks (лише коли база вже знає все з хмари)
+    afterFirstPull().then(startGoogleSync, startGoogleSync)
   }, [])
 
   useEffect(() => {

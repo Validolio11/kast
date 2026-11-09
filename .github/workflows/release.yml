@@ -31,6 +31,9 @@ jobs:
         env:
           RENDERER_VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           RENDERER_VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # Google Tasks: клієнт OAuth типу «Desktop app»; без них інтеграція в цій збірці вимкнена
+          MAIN_VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       # Один реліз з усім, що потрібно автооновленню: інсталятор, blockmap і latest.yml
       - name: Publish release
         shell: bash

@@ -6,6 +6,7 @@ import type { AppInfo, NavTarget, Settings } from '../shared/types'
 import * as settings from './settings'
 import { installUpdate, setupUpdater } from './updater'
 import { cancelOAuth, openOAuth, prepareOAuth } from './auth'
+import * as gtasks from './gtasks'
 
 const DEV_URL = process.env.ELECTRON_RENDERER_URL
 const RENDERER_DIR = join(__dirname, '../renderer')
@@ -261,6 +262,28 @@ function setupIpc() {
   ipcMain.handle('auth:prepare', () => prepareOAuth())
   ipcMain.handle('auth:open', (_e, url: string) => openOAuth(url, () => showMain()))
   ipcMain.on('auth:cancel', () => cancelOAuth())
+  ipcMain.handle('gtasks:status', () => gtasks.status())
+  ipcMain.handle('gtasks:connect', () => gtasks.connect(() => showMain()))
+  ipcMain.handle('gtasks:disconnect', () => gtasks.disconnect())
+  ipcMain.handle('gtasks:list', () => gtasks.list())
+  ipcMain.handle('gtasks:complete', (_e, listId: string, taskId: string) => {
+    if (typeof listId !== 'string' || typeof taskId !== 'string') throw new Error('bad task')
+    return gtasks.complete(listId, taskId)
+  })
+  ipcMain.handle('gtasks:syncKast', (_e, items: unknown) => {
+    if (!Array.isArray(items)) throw new Error('bad items')
+    const clean = items
+      .filter((i): i is Record<string, unknown> => !!i && typeof i === 'object' && typeof i.id === 'string' && typeof i.title === 'string')
+      .slice(0, 2000)
+      .map((i) => ({
+        id: String(i.id),
+        title: String(i.title).slice(0, 1024),
+        notes: typeof i.notes === 'string' ? i.notes.slice(0, 8000) : undefined,
+        due: typeof i.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(i.due) ? i.due : undefined,
+        done: i.done === true,
+      }))
+    return gtasks.syncKast(clean)
+  })
 
   // Резервна копія: файл обирає людина через стандартні вікна Windows
   ipcMain.handle('backup:save', async (_e, json: string, name: string) => {

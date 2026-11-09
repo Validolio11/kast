@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button, CaptureField, Card, Icon, InfoRow, ListSection, PulseChip, PulseRow, RowAction, useToast } from '@/design-system'
 import { ageOf, TaskRow, WHEN_OPTIONS } from '@/components/TaskRow'
 import { Page } from '@/components/Page'
+import { GoogleTasksSection } from '@/components/GoogleTasks'
 import { useDay, useLeftovers, useStatus, useToday } from '@/data/hooks'
 import { addToToday, MAIN_LIMIT, markPlanned, SMALL_LIMIT, takeToToday, toInbox, type Placement } from '@/data/tasks'
 import type { Task } from '@/data/db'
@@ -154,6 +155,8 @@ export function Today({
               ))}
             </ListSection>
           )}
+
+          <GoogleTasksSection date={date} />
 
           {done.length > 0 && (
             <ListSection title="Зроблено" count={done.length} collapsible defaultOpen={false}>
