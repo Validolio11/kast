@@ -10,9 +10,11 @@ import { join } from 'node:path'
 import type { GTask, GTasksStatus, KastSyncAction, KastSyncItem } from '../shared/types'
 import { openOAuth, prepareOAuth } from './auth'
 
-const CLIENT_ID = import.meta.env.MAIN_VITE_GOOGLE_CLIENT_ID ?? ''
+// Без BOM, пробілів і переносів: якщо вони потраплять у ключ, Google відповість «OAuth client was not found»
+const clean = (v?: string) => (v ?? '').replace(/^﻿/, '').trim()
+const CLIENT_ID = clean(import.meta.env.MAIN_VITE_GOOGLE_CLIENT_ID)
 // Для десктопних клієнтів Google секрет не є таємницею (його видно в кожній копії програми) — захищає PKCE
-const CLIENT_SECRET = import.meta.env.MAIN_VITE_GOOGLE_CLIENT_SECRET ?? ''
+const CLIENT_SECRET = clean(import.meta.env.MAIN_VITE_GOOGLE_CLIENT_SECRET)
 const SCOPES = 'openid email https://www.googleapis.com/auth/tasks'
 const API = 'https://tasks.googleapis.com/tasks/v1'
 
