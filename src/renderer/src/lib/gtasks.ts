@@ -6,7 +6,7 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { liveQuery } from 'dexie'
 import type { GTask, GTasksStatus, KastSyncItem } from '../../../shared/types'
 import { db, type Task } from '@/data/db'
-import { complete, update } from '@/data/tasks'
+import { complete, remove, update } from '@/data/tasks'
 import { DAY, now } from './time'
 import { isDesktop } from './platform'
 
@@ -23,6 +23,8 @@ let state: State = { status: { configured: false, connected: false }, items: [],
 const listeners = new Set<() => void>()
 let lastLoad = 0
 let inFlight: Promise<void> | null = null
+/** Завдання, що чекають видалення (ще можна скасувати): оновлення списку їх не повертає */
+const removing = new Set<string>()
 
 function set(patch: Partial<State>) {
   state = { ...state, ...patch }
@@ -51,7 +53,7 @@ export function refreshGTasks(force = false): Promise<void> {
       await syncKastToGoogle().catch((e) => console.warn('kast → google failed', e))
       const items = await window.kast.gtasks.list()
       lastLoad = Date.now()
-      set({ status, items, error: undefined })
+      set({ status, items: items.filter((t) => !removing.has(t.id)), error: undefined })
     } catch (e) {
       const msg = readable(e)
       // Доступ відкликали в Google — головний процес уже забув ключ, показуємо «Підключити»
@@ -85,6 +87,35 @@ export async function completeGTask(task: GTask) {
   } catch (e) {
     set({ items: [...state.items, task] })
     throw new Error(readable(e))
+  }
+}
+
+/** Скільки чекаємо «Скасувати», перш ніж видалити в Google (трохи довше за підказку з дією) */
+const UNDO_MS = 6500
+
+/**
+ * Видалити в Google. Рядок зникає одразу, а запит іде лише після паузи — у Google немає кошика,
+ * тож скасувати можна тільки до нього. Повертає функцію «Скасувати».
+ */
+export function removeGTask(task: GTask, onFail: (msg: string) => void): () => void {
+  removing.add(task.id)
+  set({ items: state.items.filter((t) => t.id !== task.id) })
+  const restore = () => {
+    removing.delete(task.id)
+    if (!state.items.some((t) => t.id === task.id)) set({ items: [...state.items, task] })
+  }
+  const timer = setTimeout(async () => {
+    try {
+      await window.kast.gtasks.remove(task.listId, task.id)
+      removing.delete(task.id)
+    } catch (e) {
+      restore()
+      onFail(readable(e))
+    }
+  }, UNDO_MS)
+  return () => {
+    clearTimeout(timer)
+    restore()
   }
 }
 
@@ -133,6 +164,10 @@ export function syncKastToGoogle(): Promise<void> {
     const items = (await db.tasks.toArray()).map(toItem).filter((i): i is KastSyncItem => !!i)
     const actions = await window.kast.gtasks.syncKast(items)
     for (const a of actions) {
+      if (a.deleted) {
+        await remove(a.id)
+        continue
+      }
       if (a.title) await update(a.id, { title: a.title })
       if (a.done !== undefined) await complete(a.id, a.done)
     }

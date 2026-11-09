@@ -270,6 +270,10 @@ function setupIpc() {
     if (typeof listId !== 'string' || typeof taskId !== 'string') throw new Error('bad task')
     return gtasks.complete(listId, taskId)
   })
+  ipcMain.handle('gtasks:remove', (_e, listId: string, taskId: string) => {
+    if (typeof listId !== 'string' || typeof taskId !== 'string') throw new Error('bad task')
+    return gtasks.remove(listId, taskId)
+  })
   ipcMain.handle('gtasks:syncKast', (_e, items: unknown) => {
     if (!Array.isArray(items)) throw new Error('bad items')
     const clean = items

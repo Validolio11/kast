@@ -350,6 +350,7 @@ export function PulseRow({
   muted,
   age,
   finishing,
+  onMenu,
 }: {
   leading?: ReactNode
   title: ReactNode
@@ -357,6 +358,8 @@ export function PulseRow({
   meta?: ReactNode
   actions?: ReactNode
   onClick?: () => void
+  /** Контекстне меню: права кнопка, клавіша меню або Shift+F10 (тоді — під рядком) */
+  onMenu?: (x: number, y: number) => void
   done?: boolean
   selected?: boolean
   muted?: boolean
@@ -376,8 +379,21 @@ export function PulseRow({
         onClick && 'cursor-pointer',
       )}
       onClick={onClick}
+      onContextMenu={
+        onMenu &&
+        ((e) => {
+          e.preventDefault()
+          onMenu(e.clientX, e.clientY)
+        })
+      }
       onKeyDown={(e) => {
-        if (onClick && e.target === e.currentTarget && e.key === 'Enter') onClick()
+        if (e.target !== e.currentTarget) return
+        if (onClick && e.key === 'Enter') onClick()
+        if (onMenu && (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) {
+          e.preventDefault()
+          const r = e.currentTarget.getBoundingClientRect()
+          onMenu(r.left + 24, r.bottom)
+        }
       }}
       tabIndex={onClick ? 0 : undefined}
       role={onClick ? 'button' : undefined}

@@ -53,6 +53,8 @@ export interface KastSyncAction {
   id: string
   done?: boolean
   title?: string
+  /** Задачу видалили в Google — видалити й у Kast */
+  deleted?: boolean
 }
 
 export interface GTasksStatus {
@@ -98,6 +100,7 @@ export interface KastApi {
     disconnect(): Promise<GTasksStatus>
     list(): Promise<GTask[]>
     complete(listId: string, taskId: string): Promise<void>
+    remove(listId: string, taskId: string): Promise<void>
     /** Звести задачі Kast зі списком «Kast» у Google; повертає зміни з Google */
     syncKast(items: KastSyncItem[]): Promise<KastSyncAction[]>
   }

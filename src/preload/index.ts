@@ -38,6 +38,7 @@ const api: KastApi = {
     disconnect: () => ipcRenderer.invoke('gtasks:disconnect'),
     list: () => ipcRenderer.invoke('gtasks:list'),
     complete: (listId, taskId) => ipcRenderer.invoke('gtasks:complete', listId, taskId),
+    remove: (listId, taskId) => ipcRenderer.invoke('gtasks:remove', listId, taskId),
     syncKast: (items) => ipcRenderer.invoke('gtasks:syncKast', items),
   },
   window: {

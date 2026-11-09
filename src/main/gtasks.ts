@@ -222,6 +222,11 @@ export async function complete(listId: string, taskId: string): Promise<void> {
   })
 }
 
+/** Видалити завдання в Google назовсім (у Google Tasks немає кошика) */
+export async function remove(listId: string, taskId: string): Promise<void> {
+  await api(`/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' })
+}
+
 /* ───────────── Kast → Google: список «Kast» ───────────── */
 
 const KAST_LIST = 'Kast'
@@ -265,7 +270,7 @@ let syncing: Promise<KastSyncAction[]> | null = null
 
 /**
  * Звести задачі Kast зі списком «Kast» у Google. items — відкриті задачі й нещодавно виконані.
- * Повертає зміни, зроблені в Google, які Kast має застосувати в себе (виконання, перейменування).
+ * Повертає зміни, зроблені в Google, які Kast має застосувати в себе (виконання, перейменування, видалення).
  */
 export function syncKast(items: KastSyncItem[]): Promise<KastSyncAction[]> {
   syncing ??= run(items).finally(() => {
@@ -284,6 +289,15 @@ async function run(items: KastSyncItem[]): Promise<KastSyncAction[]> {
   const patch = (gid: string, body: Record<string, unknown>) =>
     api(`${base}/${encodeURIComponent(gid)}`, { method: 'PATCH', body: JSON.stringify(body) })
 
+  // Видалені в Google задачі видаляємо і в Kast. Але якщо зникло багато одразу (понад 5 і більше половини
+  // пов'язаних) — це схоже на збій чи очищений список, а не на рішення людини: тоді лише розв'язуємо, нічого не стираючи.
+  const linked = items.filter((it) => links[it.id]?.g)
+  const missing = linked.filter((it) => {
+    const g = remote.get(links[it.id].g!)
+    return !g || g.deleted
+  })
+  const massLoss = missing.length > 5 && missing.length * 2 > linked.length
+
   for (const it of items) {
     const link = links[it.id]
     if (!link) {
@@ -299,8 +313,13 @@ async function run(items: KastSyncItem[]): Promise<KastSyncAction[]> {
     if (!link.g) continue
     const g = remote.get(link.g)
     if (!g || g.deleted) {
-      // Видалили в Google — Kast задачу не чіпає, лише перестає її синхронізувати
-      links[it.id] = { ...link, g: null }
+      if (massLoss) {
+        // Запобіжник: задача лишається в Kast, лише перестає синхронізуватися
+        links[it.id] = { ...link, g: null }
+      } else {
+        actions.push({ id: it.id, deleted: true })
+        delete links[it.id]
+      }
       continue
     }
     const body: Record<string, unknown> = {}

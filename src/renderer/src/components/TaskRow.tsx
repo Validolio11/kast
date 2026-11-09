@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { CheckCircle, CycleChip, Icon, PulseRow, useToast, type ChipOption } from '@/design-system'
+import { CheckCircle, ContextMenu, CycleChip, Icon, PulseRow, useToast, type ChipOption } from '@/design-system'
 import type { Task, When } from '@/data/db'
-import { complete, repeatLabel, STALE_DAYS, update } from '@/data/tasks'
+import { complete, remove, repeatLabel, STALE_DAYS, update } from '@/data/tasks'
 import { DAY, now, pluralWord } from '@/lib/time'
 
 /** Скільки триває анімація виконання до переходу задачі у «Зроблено» */
@@ -64,33 +64,58 @@ export function TaskRow({
     if (p === 'inbox') toast({ kind: 'info', title: 'День уже повний — задачу повернуто у Вхідні' })
     else if (p) toast({ title: 'Повернуто на сьогодні' })
   }
+
+  // Контекстне меню рядка: права кнопка, клавіша меню або Shift+F10
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const del = async () => {
+    setMenu(null)
+    await remove(task.id)
+    toast({ kind: 'info', icon: 'trash', title: 'Задачу видалено', action: { label: 'Скасувати', onClick: () => update(task.id, { deleted: 0 }) } })
+  }
+
   return (
-    <PulseRow
-      leading={<CheckCircle checked={done || finishing} onChange={toggle} label={`Виконано: ${task.title}`} />}
-      title={task.title}
-      sub={task.firstStep && !done ? `${task.stepsDone ? 'Наступний крок' : 'Перший крок'}: ${task.firstStep}` : undefined}
-      done={done}
-      finishing={finishing}
-      muted={muted}
-      onClick={() => onOpen(task.id)}
-      actions={actions}
-      age={ageOf(task)}
-      meta={
-        <>
-          {/* Повтор — тиха позначка: іконка й ритм, повна назва в підказці */}
-          {!!task.repeat && !done && (
-            <span data-tip={repeatLabel(task.repeat)} className="inline-flex items-center gap-1 text-[12px] font-bold text-muted">
-              <Icon name="repeat" size={14} />
-              {task.repeat === 1 ? 'щодня' : `${task.repeat} дн`}
-            </span>
-          )}
-          {meta}
-          {showWhen && !done && (
-            <CycleChip value={task.when} options={WHEN_OPTIONS} onChange={(when) => update(task.id, { when })} label="Коли зроблю" />
-          )}
-        </>
-      }
-    />
+    <>
+      <PulseRow
+        leading={<CheckCircle checked={done || finishing} onChange={toggle} label={`Виконано: ${task.title}`} />}
+        title={task.title}
+        sub={task.firstStep && !done ? `${task.stepsDone ? 'Наступний крок' : 'Перший крок'}: ${task.firstStep}` : undefined}
+        done={done}
+        finishing={finishing}
+        muted={muted}
+        onClick={() => onOpen(task.id)}
+        onMenu={finishing ? undefined : (x, y) => setMenu({ x, y })}
+        actions={actions}
+        age={ageOf(task)}
+        meta={
+          <>
+            {/* Повтор — тиха позначка: іконка й ритм, повна назва в підказці */}
+            {!!task.repeat && !done && (
+              <span data-tip={repeatLabel(task.repeat)} className="inline-flex items-center gap-1 text-[12px] font-bold text-muted">
+                <Icon name="repeat" size={14} />
+                {task.repeat === 1 ? 'щодня' : `${task.repeat} дн`}
+              </span>
+            )}
+            {meta}
+            {showWhen && !done && (
+              <CycleChip value={task.when} options={WHEN_OPTIONS} onChange={(when) => update(task.id, { when })} label="Коли зроблю" />
+            )}
+          </>
+        }
+      />
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          label={task.title}
+          autoFocus
+          onClose={() => setMenu(null)}
+          items={[
+            { label: 'Відкрити', icon: 'arrowUpRight', onSelect: () => (setMenu(null), onOpen(task.id)) },
+            { label: 'Видалити', icon: 'trashLines', tone: 'danger', onSelect: del },
+          ]}
+        />
+      )}
+    </>
   )
 }
 
