@@ -759,3 +759,65 @@
   .focus-view .seg-tabs { width: 100%; flex-wrap: nowrap; }
   .focus-view .seg-tabs > button { flex: 1 1 0; justify-content: center; padding-inline: 4px; }
 }
+
+/*
+ * Блокнот — темний холст, як Notion у темній темі: світлої картки немає, текст світлий на фоні застосунку.
+ * Редактор і кнопки аркуша намальовані «паперовими» кольорами — тут вони перевизначені локально,
+ * тож той самий редактор у Фокусі лишається на папері.
+ */
+.notebook-canvas {
+  --color-paper: #3a3a3c;
+  --color-paper-line: #2c2c2e;
+  --color-paper-muted: #a1a1a6;
+  --color-ink: #f4f4f2;
+  --color-canvas: #1f1f1f;
+  /* Кольори тексту світліші — на темному фоні контраст ≥ 4.5:1 */
+  --note-c-red: #ff6b6d;
+  --note-c-orange: #ff9f43;
+  --note-c-brown: #d2a679;
+  --note-c-green: #3ddc84;
+  --note-c-teal: #2dd4bf;
+  --note-c-blue: #6aa8ff;
+  --note-c-violet: #b18cff;
+  --note-c-pink: #f472b6;
+  --note-c-grey: #a1a1a6;
+  /* Маркери прозоріші: темна підкладка, світлий текст на ній читається (контраст ≥ 7:1) */
+  --note-m-red: rgb(255 77 79 / 0.3);
+  --note-m-orange: rgb(255 146 43 / 0.3);
+  --note-m-yellow: rgb(255 214 10 / 0.32);
+  --note-m-green: rgb(19 242 135 / 0.28);
+  --note-m-teal: rgb(32 201 201 / 0.3);
+  --note-m-blue: rgb(77 148 255 / 0.32);
+  --note-m-violet: rgb(132 66 255 / 0.38);
+  --note-m-pink: rgb(255 92 168 / 0.3);
+  --note-m-grey: rgb(142 142 147 / 0.35);
+}
+.notebook-canvas .note-editor ::selection,
+.notebook-canvas input::selection {
+  color: #090a0a;
+}
+.notebook-canvas ::highlight(kast-multi) {
+  color: #090a0a;
+}
+/* Кнопки «паперового» тону: наведення темніше, а не світле */
+.notebook-canvas [class*='d8d8d6']:hover {
+  background-color: var(--color-steel);
+}
+/* Підказка при наведенні — світла плашка, як і всюди */
+.notebook-canvas [data-tip]::after {
+  background: #f4f4f2;
+  color: #090a0a;
+}
+/* Виконаний чекбокс — зелений квадратик з темною галочкою */
+.notebook-canvas .note-editor > div[data-block='todo'][data-checked='1']::before {
+  border-color: var(--color-growth);
+  background: var(--color-growth)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23090a0a' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E")
+    center / 14px no-repeat;
+}
+@media (max-width: 640px) {
+  .notebook-sheet.notebook-canvas {
+    padding: 4px 0 12px;
+    border-radius: 0;
+  }
+}

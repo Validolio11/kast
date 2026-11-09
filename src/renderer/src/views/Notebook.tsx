@@ -311,7 +311,8 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
 
   return (
     // Фіксований розмір за будь-якої ширини вікна; довгий текст прокручується всередині
-    <section className="notebook-sheet relative flex h-[720px] flex-col rounded-panel bg-paper p-10 pb-6 text-ink max-[640px]:p-6" {...drop.dropProps}>
+    // Темний холст, як у Notion: без картки й рамок, текст прямо на фоні застосунку (кольори — у .notebook-canvas)
+    <section className="notebook-sheet notebook-canvas relative flex h-[720px] flex-col px-2 pt-2 pb-4 text-ink" {...drop.dropProps}>
       <DropHint show={drop.over} />
       <button className="notebook-back" onClick={onBack}><Icon name="chevronLeft" size={18} /> Усі нотатки</button>
       <div className="notebook-sheet-meta flex items-center gap-3">
@@ -365,7 +366,7 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
         />
       </div>
       {/* Підвал: сторінки ліворуч, фото, замок, закріпити й видалити праворуч; тісно — переноситься */}
-      <div className="notebook-sheet-footer mt-4 flex flex-wrap items-center gap-2 border-t border-paper-line pt-4">
+      <div className="notebook-sheet-footer mt-4 flex flex-wrap items-center gap-2 pt-2">
         <div className="notebook-page-controls flex flex-1 justify-start">
           <div
             role="tablist"
