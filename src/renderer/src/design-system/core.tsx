@@ -90,7 +90,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        'relative inline-flex select-none items-center justify-center rounded-full font-extrabold whitespace-nowrap',
+        'relative inline-flex select-none items-center justify-center rounded-button font-semibold whitespace-nowrap',
         'transition-[transform,background-color,box-shadow,filter] duration-200 ease-pulse',
         'hover:-translate-y-0.5 active:scale-[0.97] disabled:opacity-40 disabled:hover:translate-y-0 disabled:active:scale-100',
         btnVariant[variant],
