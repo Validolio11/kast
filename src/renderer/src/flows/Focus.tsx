@@ -54,8 +54,8 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
 
   return (
     <EnteringContext.Provider value={entering !== undefined}>
-    <div data-entering={entering} className="focus-view h-full overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-[1280px] flex-col px-8 pt-6 pb-16 max-[640px]:px-4">
+    <div data-entering={entering} className="focus-view h-full min-w-0 w-full overflow-y-auto">
+      <div className="app-page-content flex min-w-0 w-full flex-col pt-6 pb-16">
         <div className="mb-7 flex animate-enter items-start gap-5">
           <RoundButton icon="chevronLeft" size={56} label="Назад · Esc" onClick={onClose} />
           <div className="flex min-w-0 flex-1 flex-col gap-3.5">

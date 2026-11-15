@@ -2,6 +2,7 @@
 #   git tag v0.1.1 && git push origin v0.1.1
 # Workflow збере інсталятор Windows (з latest.yml) і підписаний APK для Android в одному релізі —
 # встановлені копії Kast побачать оновлення протягом 4 годин (або одразу після запуску).
+# Позначка [windows-only] у повідомленні релізного коміту обмежує випуск Windows.
 name: Release
 
 on:
@@ -14,8 +15,18 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    outputs:
+      build_android: ${{ steps.platforms.outputs.build_android }}
     steps:
       - uses: actions/checkout@v4
+      - name: Select release platforms
+        id: platforms
+        shell: bash
+        run: |
+          case "$(git log -1 --format=%B)" in
+            *"[windows-only]"*) echo "build_android=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "build_android=true" >> "$GITHUB_OUTPUT" ;;
+          esac
       - uses: pnpm/action-setup@v4
         with:
           version: 11
@@ -45,6 +56,7 @@ jobs:
   # Kast на телефоні бачить новий Kast-Android-<версія>.apk і пропонує його завантажити.
   android:
     needs: windows
+    if: ${{ needs.windows.outputs.build_android == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

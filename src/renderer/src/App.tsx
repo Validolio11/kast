@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { startGoogleSync } from '@/lib/gtasks'
-import { AppHeader, Button, Modal, RoundButton, SyncDot, ToastProvider, UpdatePill, useToast, WindowControls, type NavTab } from '@/design-system'
+import { AppHeader, AppMobileHeader, AppSidebar, Button, Modal, PageHeaderContext, RoundButton, SyncDot, ToastProvider, UpdatePill, useToast, WindowControls, type NavTab } from '@/design-system'
 import { useDay, useStatus, useToday } from '@/data/hooks'
 import { activateRepeats, rolloverLeftovers, sweepStale } from '@/data/tasks'
 import { markLegacyQuickNote } from '@/data/notes'
@@ -63,6 +63,14 @@ function Shell() {
   const [closing, setClosing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [maximized, setMaximized] = useState(false)
+  const [pageHeader, setPageHeader] = useState<HTMLDivElement | null>(null)
+  const [desktop, setDesktop] = useState(() => matchMedia('(min-width: 768px)').matches)
+  useEffect(() => {
+    const query = matchMedia('(min-width: 768px)')
+    const change = () => setDesktop(query.matches)
+    query.addEventListener('change', change)
+    return () => query.removeEventListener('change', change)
+  }, [])
   const captureRef = useRef<HTMLInputElement>(null)
   const date = useDayKey()
   const [settings] = useSettings()
@@ -164,11 +172,11 @@ function Shell() {
         go(TABS[n - 1])
       } else if (e.key.toLowerCase() === 'n' || e.code === 'KeyN') {
         e.preventDefault()
-        setFocusId(null)
+            setFocusId(null)
         requestAnimationFrame(() => captureRef.current?.focus())
       } else if (e.key === ',') {
         e.preventDefault()
-        setSettingsOpen(true)
+            setSettingsOpen(true)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -185,34 +193,34 @@ function Shell() {
   const onOpen = (id: string) => setFocusId(id)
 
   return (
-    <div className="app-shell flex h-full flex-col bg-canvas">
-      <AppHeader
+    <div className="app-shell flex h-full min-w-0 w-full bg-canvas">
+      <AppSidebar
+        tabs={tabs}
+        active={tab}
+        onSelect={go}
+        onSettings={() => setSettingsOpen(true)}
+        settingsBadge={sync.state !== 'local' ? <SyncDot state={sync.state} /> : undefined}
+      />
+      <div className="app-workspace">
+      <AppMobileHeader
         tabs={tabs}
         active={tab}
         onSelect={go}
         actions={
           <>
             {update.kind === 'ready' && <UpdatePill version={update.version} onClick={installUpdate} />}
-            <RoundButton
-              icon="cog"
-              label="Налаштування"
-              onClick={() => setSettingsOpen(true)}
-              badge={sync.state !== 'local' && <SyncDot state={sync.state} />}
-            />
+            <RoundButton icon="cog" label="Налаштування" onClick={() => setSettingsOpen(true)} badge={sync.state !== 'local' && <SyncDot state={sync.state} />} />
           </>
         }
-        windowControls={
-          window.kast && (
-            <WindowControls
-              maximized={maximized}
-              onMinimize={() => window.kast.window.minimize()}
-              onToggleMaximize={() => window.kast.window.toggleMaximize()}
-              onClose={() => window.kast.window.close()}
-            />
-          )
-        }
       />
-      <main className="min-h-0 flex-1">
+      <PageHeaderContext.Provider value={desktop ? pageHeader : null}>
+      <AppHeader
+        title={focusId ? 'Задача' : tabs.find(t => t.id === tab)?.label ?? 'Kast'}
+        headingRef={setPageHeader}
+        actions={update.kind === 'ready' ? <UpdatePill version={update.version} onClick={installUpdate} /> : undefined}
+        windowControls={window.kast && <WindowControls maximized={maximized} onMinimize={() => window.kast.window.minimize()} onToggleMaximize={() => window.kast.window.toggleMaximize()} onClose={() => window.kast.window.close()} />}
+      />
+      <main className="app-main min-h-0 min-w-0 flex-1">
         {focusId ? (
           <Focus id={focusId} onClose={() => setFocusId(null)} />
         ) : tab === 'today' ? (
@@ -225,6 +233,8 @@ function Shell() {
           <Done captureRef={captureRef} onOpen={onOpen} />
         )}
       </main>
+      </PageHeaderContext.Provider>
+      </div>
       <CloseDay open={closing} onClose={() => setClosing(false)} />
       <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <AccountSwitch switching={sync.switching} email={sync.email} />

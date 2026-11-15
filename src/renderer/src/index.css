@@ -633,6 +633,62 @@
   }
 }
 
+/* Меню зліва та заголовок у шапці — лише для комп’ютера. */
+:root { --kast-gutter: 24px; --kast-layout-gap: clamp(20px, 2vw, 32px); }
+.app-workspace { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
+.app-page-content { max-width: 100%; padding-inline: var(--kast-gutter); }
+.desktop-app-header, .app-sidebar { display: none; }
+.notebook-page-controls [role='tablist'] { scrollbar-width: thin; }
+.notebook-canvas .note-editor { overflow-wrap: anywhere; }
+.app-header-actions [data-tip]::after,
+.notebook-convert-action[data-tip]::after,
+.notebook-sheet-footer [data-tip]::after { left: auto; right: 0; --tip-x: 0%; }
+.notebook-sheet-footer [data-tip]::after { top: auto; bottom: calc(100% + 10px); }
+
+@media (min-width: 768px) {
+  .mobile-app-header { display: none; }
+  .app-main { container: workspace / inline-size; }
+  .app-shell { --kast-titlebar-height: 76px; }
+  .desktop-app-header { display: flex; height: var(--kast-titlebar-height); padding-inline: var(--kast-gutter); }
+  .app-header-heading:empty::before { display: block; content: attr(data-fallback); font-size: 24px; font-weight: 700; line-height: 1.15; }
+  .desktop-app-header .page-head { width: 100%; margin: 0; gap: 16px; align-items: center; animation: none; }
+  /* Рівні рядки над і під h1 тримають його на одній осі з логотипом і кнопками вікна. */
+  .desktop-app-header .page-head > div:first-child { display: grid; grid-template: 1fr auto 1fr / minmax(0, 1fr); gap: 2px; }
+  .desktop-app-header .page-head h1 { grid-row: 2; font-size: clamp(24px, 2.2vw, 28px); line-height: 1.15; }
+  .desktop-app-header .page-head > div:first-child > div { grid-row: 3; font-size: 12px; font-weight: 500; line-height: 16px; }
+  .app-page-content { padding-top: 16px; }
+  .app-sidebar { display: flex; flex-direction: column; flex: 0 0 224px; width: 224px; min-width: 0; min-height: 0; height: 100%; border-right: 1px solid var(--color-hairline); background: var(--color-canvas); }
+  .app-sidebar-brand { display: flex; flex-shrink: 0; align-items: center; gap: 12px; height: var(--kast-titlebar-height); padding-inline: 20px; }
+  .app-sidebar-nav { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 8px; padding: 12px; overflow-y: auto; }
+  .sidebar-nav-item { display: flex; position: relative; flex-shrink: 0; align-items: center; gap: 12px; width: 100%; min-width: 0; min-height: 48px; padding: 12px 14px; border-radius: var(--radius-control); font-size: 15px; transition: background-color 150ms, color 150ms; }
+  .sidebar-count { margin-left: auto; }
+  .app-sidebar-footer { flex-shrink: 0; padding: 12px; border-top: 1px solid var(--color-hairline); }
+  .notebook-back, .notebook-page-menu { display: none; }
+  .notebook-list { flex: 1; }
+  .page-grid { grid-template-columns: minmax(0, 1fr); gap: var(--kast-layout-gap); }
+  .app-page-content-fill { height: 100%; min-height: 400px; padding-bottom: 24px; }
+  .page-grid-fill { min-height: 0; flex: 1; grid-template-rows: minmax(0, 1fr); }
+  .page-grid-fill > .page-grid-side, .page-grid-fill > .page-grid-main { min-height: 0; height: 100%; }
+  .page-grid-fill .notebook-sheet { min-height: 0; height: 100%; }
+  @container workspace (min-width: 960px) {
+    .page-grid { grid-template-columns: minmax(280px, min(28cqw, 360px)) minmax(0, 1fr); }
+  }
+  @container workspace (max-width: 959px) {
+    .notebook-view[data-detail='false'] .page-grid-main { display: none; }
+    .notebook-view[data-detail='true'] .page-grid-side { display: none; }
+    .notebook-view .notebook-back { display: inline-flex; flex-shrink: 0; align-items: center; align-self: flex-start; gap: 6px; min-height: 40px; margin-top: -8px; margin-bottom: 8px; padding: 0 8px 0 2px; border-radius: 20px; color: var(--color-paper-muted); font-size: 14px; font-weight: 800; }
+  }
+}
+@media (min-width: 768px) and (max-width: 1199px) {
+  .app-sidebar { flex-basis: 76px; width: 76px; }
+  .app-sidebar-brand { justify-content: center; padding-inline: 0; }
+  .app-sidebar .sidebar-label { display: none; }
+  .sidebar-nav-item { justify-content: center; padding-inline: 0; }
+  .sidebar-count { position: absolute; top: 2px; right: 0; min-width: 18px; padding: 0 4px; border-radius: 9px; background: var(--color-steel); color: var(--color-white); font-size: 10px; line-height: 18px; text-align: center; }
+  .sidebar-nav-item[aria-current='page'] .sidebar-count { background: var(--color-canvas); }
+  .sidebar-status { position: absolute; right: 4px; bottom: 5px; }
+}
+
 /* Телефон: ті самі компоненти Pulse, компактна шапка й навігація під великий палець. */
 .mobile-current-title, .mobile-nav-icon, .notebook-back, .notebook-page-menu { display: none; }
 @media (max-width: 767px) {
@@ -645,7 +701,7 @@
     --kast-nav-height: calc(72px + var(--kast-safe-bottom));
   }
   html, body, #root { min-width: 0; overscroll-behavior: none; }
-  .app-shell { height: 100dvh; padding-bottom: var(--kast-nav-height); }
+  .app-shell { height: 100dvh; flex-direction: column; padding-bottom: var(--kast-nav-height); }
   .drag { -webkit-app-region: no-drag; }
   .app-header {
     min-height: var(--kast-header-height);
@@ -669,7 +725,7 @@
   .app-nav-count { position: absolute; top: 5px; right: 9px; max-width: 30px; overflow: hidden; font-size: 10px; line-height: 14px; }
   .app-page-content { padding: 16px calc(var(--kast-safe-right) + 16px) 24px calc(var(--kast-safe-left) + 16px); }
   .page-head { flex-wrap: wrap; gap: 16px; margin-bottom: 22px; }
-  .page-head h1 { font-size: clamp(36px, 10vw, 46px); overflow-wrap: anywhere; }
+  .page-head h1 { font-size: clamp(20px, 5.5vw, 26px); }
   .page-head > div:first-child { gap: 10px; }
   .page-head > div:last-child:not(:first-child) { flex-shrink: 1; justify-content: flex-start; }
   .page-grid { gap: 20px; }
@@ -732,7 +788,6 @@
   *::-webkit-scrollbar { display: none; }
   /* Назва вкладки вже є в шапці — великий заголовок сторінки компактніший */
   .page-head { margin-bottom: 18px; }
-  .page-head h1 { font-size: clamp(30px, 8.6vw, 38px); }
   /* Картка «Зараз»: назва переноситься цілими словами, а не посеред слова */
   .now-title { font-size: clamp(28px, 8.4vw, 36px); line-height: 1; overflow-wrap: break-word; hyphens: auto; }
   /* Лічильник у навігації — маленька капсула на іконці */

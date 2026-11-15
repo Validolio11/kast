@@ -1,6 +1,6 @@
 /*
  * Karkas Pulse для Kast: чорне полотно, капсули, цифра — герой, зелений лише для росту.
- * Кожна сторінка збирається однаково: PageHead (два рядки великими) → PageGrid (колонка 400px + основна).
+ * Кожна сторінка збирається однаково: PageHead (компактний заголовок в один рядок) → PageGrid (колонка 400px + основна).
  * Джерело токенів і правил — дизайн-система «Karkas Pulse» у конструкторі.
  */
 import { createContext, forwardRef, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react'
@@ -30,8 +30,63 @@ export interface NavTab<T extends string> {
   tip?: string
 }
 
+/** Ліве меню для комп’ютера; мобільна навігація залишається окремою. */
+export function AppSidebar<T extends string>({ tabs, active, onSelect, onSettings, settingsBadge }: {
+  tabs: NavTab<T>[]
+  active: T
+  onSelect: (id: T) => void
+  onSettings: () => void
+  settingsBadge?: ReactNode
+}) {
+  return (
+    <aside className="app-sidebar" aria-label="Головне меню">
+      <div className="app-sidebar-brand drag">
+        <KastMark size={40} />
+        <span className="sidebar-label text-[22px] font-extrabold tracking-tight">Kast</span>
+      </div>
+      <nav className="app-sidebar-nav no-drag" aria-label="Розділи">
+        {tabs.map(t => {
+          const selected = t.id === active
+          return (
+            <button key={t.id} onClick={() => onSelect(t.id)} aria-label={t.count ? `${t.label}, ${t.count}` : t.label} aria-current={selected ? 'page' : undefined} title={`${t.label}${t.tip ? ` · ${t.tip}` : ''}`} className={cn('sidebar-nav-item', selected ? 'bg-paper text-ink font-extrabold' : 'text-grey hover:bg-tile hover:text-paper font-semibold')}>
+              {t.icon && <Icon name={t.icon} size={21} className="shrink-0" />}
+              <span className="sidebar-label min-w-0 flex-1 truncate text-left">{t.label}</span>
+              {!!t.count && <span className={cn('sidebar-count text-[12px] font-bold tabular-nums', selected ? 'text-paper-muted' : 'text-muted')}>{t.count > 999 ? '999+' : t.count}</span>}
+            </button>
+          )
+        })}
+      </nav>
+      <div className="app-sidebar-footer no-drag">
+        <button className="sidebar-nav-item text-grey hover:bg-tile hover:text-paper font-semibold" aria-label="Налаштування" title="Налаштування · Ctrl + ," onClick={onSettings}>
+          <Icon name="cog" size={21} className="shrink-0" />
+          <span className="sidebar-label min-w-0 flex-1 truncate text-left">Налаштування</span>
+          {settingsBadge && <span className="sidebar-status grid shrink-0">{settingsBadge}</span>}
+        </button>
+      </div>
+    </aside>
+  )
+}
+
+/** Заголовок активної сторінки знаходиться в шапці над робочою областю. */
+export function AppHeader({ title, headingRef, actions, windowControls }: {
+  title: string
+  headingRef: (element: HTMLDivElement | null) => void
+  actions?: ReactNode
+  windowControls?: ReactNode
+}) {
+  return (
+    <header className="desktop-app-header app-header drag min-w-0 shrink-0 items-center gap-4 select-none" aria-label="Панель вікна">
+      <div ref={headingRef} className="app-header-heading min-w-0 flex-1" data-fallback={title} />
+      <div className="app-header-actions no-drag flex shrink-0 items-center justify-end gap-2">
+        {actions}
+        {windowControls}
+      </div>
+    </header>
+  )
+}
+
 /** Шапка 76px: знак, вкладки-капсули по центру, дії й кнопки вікна праворуч. Порожні місця тягнуть вікно. */
-export function AppHeader<T extends string>({
+export function AppMobileHeader<T extends string>({
   tabs,
   active,
   onSelect,
@@ -45,10 +100,10 @@ export function AppHeader<T extends string>({
   windowControls?: ReactNode
 }) {
   return (
-    <header className="app-header drag grid min-h-[76px] shrink-0 grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-4 py-4 pr-4 pl-6 select-none">
+    <header className="mobile-app-header app-header drag grid min-h-[76px] min-w-0 w-full shrink-0 grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-4 py-4 select-none">
       <KastMark />
       <span className="mobile-current-title">{tabs.find((t) => t.id === active)?.label}</span>
-      <nav aria-label="Розділи" className="app-nav flex justify-center gap-1">
+      <nav aria-label="Розділи" className="app-nav flex min-w-0 items-center justify-center gap-1">
         {tabs.map((t) => {
           const on = t.id === active
           return (
@@ -69,7 +124,7 @@ export function AppHeader<T extends string>({
           )
         })}
       </nav>
-      <div className="app-header-actions no-drag flex items-center justify-end gap-2">
+      <div className="app-header-actions no-drag flex min-w-0 items-center justify-end gap-2">
         {actions}
         {windowControls}
       </div>
@@ -141,36 +196,39 @@ export function RoundButton({
 
 /* ───────────── Сторінка ───────────── */
 /**
- * Заголовок сторінки: два рядки великими — тонкий над жирним.
- * Покращення до Pulse: розмір тягнеться від 44 до 80px за шириною й висотою вікна,
- * щоб на ноутбуці заголовок не з'їдав половину екрана.
+ * Заголовок сторінки в один рядок: тонка й жирна частини зі спільною базовою лінією.
+ * Компактний розмір залишає більше місця для вмісту; на вузькому екрані текст обрізається.
  */
+export const PageHeaderContext = createContext<HTMLElement | null>(null)
+
 export function PageHead({ light, heavy, sub, actions }: { light: string; heavy: string; sub?: ReactNode; actions?: ReactNode }) {
-  return (
+  const host = useContext(PageHeaderContext)
+  const content = (
     <div className="page-head mb-7 flex animate-enter items-start justify-between gap-5">
-      <div className="flex min-w-0 flex-col items-start gap-3.5">
-        <h1 className="text-[clamp(44px,min(6vw,9vh),80px)] leading-[0.92] tracking-[-0.035em] uppercase">
-          <span className="block font-light">{light}</span>
-          <span className="block font-extrabold">{heavy}</span>
+      <div className="flex min-w-0 flex-1 flex-col items-start gap-3.5">
+        <h1 title={`${light} ${heavy}`} className="w-full truncate text-[clamp(28px,3vw,40px)] leading-[1.1] tracking-[-0.035em] uppercase">
+          <span className="font-light">{light}</span>{' '}
+          <span className="font-extrabold">{heavy}</span>
         </h1>
         {sub && <div className="text-[14px] font-bold text-grey">{sub}</div>}
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
+      {actions && <div className="no-drag flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
     </div>
   )
+  return host ? createPortal(content, host) : content
 }
 
-/** Сітка Pulse: ліва колонка 400px і основна; вужче 1040px — одна колонка */
+/** Гнучкі колонки; перемикання залежить від ширини вмісту після бокового меню. */
 export function PageGrid({ side, main, fill }: { side: ReactNode; main: ReactNode; fill?: boolean }) {
   return (
     <div
       className={cn(
-        'page-grid grid min-w-0 grid-cols-[400px_minmax(0,1fr)] items-start gap-6 max-[1039px]:grid-cols-1',
-        fill && 'items-stretch',
+        'page-grid grid min-w-0 w-full items-start gap-6',
+        fill && 'page-grid-fill items-stretch',
       )}
     >
-      {/* fill: ліва колонка не розтягує рядок (h-0), а займає рівно висоту основної */}
-      <div className={cn('page-grid-side enter-stagger flex min-w-0 flex-col gap-3 [--enter-base:80ms]', fill && 'min-[1040px]:h-0 min-[1040px]:min-h-full')}>
+      {/* Висоту й кількість колонок визначає доступна ширина робочої області. */}
+      <div className="page-grid-side enter-stagger flex min-w-0 flex-col gap-3 [--enter-base:80ms]">
         {side}
       </div>
       {/* Перший список у колонці починається без верхнього відступу — рівно з полем ліворуч */}

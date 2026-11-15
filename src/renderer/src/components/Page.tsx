@@ -12,8 +12,8 @@ export function useEntering() {
 }
 
 /**
- * Єдиний скелет вкладки Pulse: великий заголовок у два рядки → колонка 400px + основна.
- * Ширина 1280px, відступи 24 / 32. Однакове місце кожного блоку на всіх вкладках.
+ * Спільний макет вкладок: компактний заголовок і гнучкі колонки.
+ * Робоча область займає ширину вікна зі спільними безпечними відступами.
  */
 export function Page({
   light,
@@ -36,8 +36,8 @@ export function Page({
   const entering = useEntering()
   return (
     <EnteringContext.Provider value={entering !== undefined}>
-      <div data-entering={entering} className="app-page h-full overflow-y-auto">
-        <div className={cn('app-page-content mx-auto flex w-full max-w-[1280px] flex-col px-8 pt-6 pb-16 max-[640px]:px-4', fill && 'pb-8')}>
+      <div data-entering={entering} className="app-page h-full min-w-0 w-full overflow-y-auto">
+        <div className={cn('app-page-content flex min-w-0 w-full flex-col pt-6 pb-16', fill && 'app-page-content-fill pb-8')}>
           <PageHead light={light} heavy={heavy} sub={sub} actions={actions} />
           <PageGrid side={side} main={main} fill={fill} />
         </div>

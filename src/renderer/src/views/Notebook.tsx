@@ -45,7 +45,7 @@ export function Notebook({ captureRef }: { captureRef: React.RefObject<HTMLInput
   }
 
   return (
-    <div className="notebook-view h-full" data-detail={mobileDetail}>
+    <div className="notebook-view h-full min-w-0 w-full" data-detail={mobileDetail}>
     <Page
       light="Мій"
       heavy="блокнот"
@@ -71,7 +71,7 @@ export function Notebook({ captureRef }: { captureRef: React.RefObject<HTMLInput
             action={{ icon: 'plus', label: 'Нова нотатка', onClick: () => create() }}
             autoFocus
           />
-          <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pb-1 min-[1040px]:flex-1">
+          <div className="notebook-list flex min-h-0 flex-col gap-3 overflow-y-auto pb-1 min-[1040px]:flex-1">
             {shown.map((n) => (
               <NoteTile key={n.id} note={n} selected={n.id === current?.id} onClick={() => { setSelected(n.id); setMobileDetail(true) }} />
             ))}
@@ -106,7 +106,7 @@ function NoteTile({ note, selected, onClick }: { note: Note; selected: boolean; 
       onClick={onClick}
       aria-current={selected || undefined}
       className={cn(
-        'flex shrink-0 items-center gap-3 rounded-[30px] px-6 py-[18px] text-left transition-colors duration-150',
+        'flex min-w-0 w-full shrink-0 items-center gap-3 rounded-[30px] px-6 py-[18px] text-left transition-colors duration-150',
         enter,
         selected ? 'bg-steel' : 'bg-tile hover:bg-[#2a2a2c]',
       )}
@@ -310,20 +310,20 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
   }
 
   return (
-    // Фіксований розмір за будь-якої ширини вікна; довгий текст прокручується всередині
+    // На широкому екрані аркуш займає доступну висоту, довгий текст прокручується всередині
     // Темний холст, як у Notion: без картки й рамок, текст прямо на фоні застосунку (кольори — у .notebook-canvas)
-    <section className="notebook-sheet notebook-canvas relative flex h-[720px] flex-col px-2 pt-2 pb-4 text-ink" {...drop.dropProps}>
+    <section className="notebook-sheet notebook-canvas relative flex h-[720px] min-w-0 w-full flex-col px-0 pt-2 pb-4 text-ink" {...drop.dropProps}>
       <DropHint show={drop.over} />
       <button className="notebook-back" onClick={onBack}><Icon name="chevronLeft" size={18} /> Усі нотатки</button>
-      <div className="notebook-sheet-meta flex items-center gap-3">
+      <div className="notebook-sheet-meta flex min-w-0 flex-wrap items-center gap-3">
         {!!note.pinned && <PulseChip tone="growth">Закріплено</PulseChip>}
         {locked && <PulseChip tone="canvas">Лише читання</PulseChip>}
-        <span className="text-[14px] font-bold text-dim">
+        <span className="min-w-0 text-[14px] font-bold text-dim">
           Змінено {age(note.updatedAt)}, {fmtTime(note.updatedAt)}
         </span>
         {/* Дія з рядком — у верхньому правому куті аркуша; у заблокованій нотатці її немає */}
         {!locked && (
-          <Button variant="canvas" size="sm" iconLeft="arrowUpRight" className="notebook-convert-action ml-auto" onClick={() => editorRef.current?.convertCurrent()} data-tip="Ctrl + Enter">
+          <Button variant="canvas" size="sm" iconLeft="arrowUpRight" className="notebook-convert-action ml-auto shrink-0" onClick={() => editorRef.current?.convertCurrent()} data-tip="Ctrl + Enter">
             Рядок у задачі
           </Button>
         )}
@@ -367,11 +367,11 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
       </div>
       {/* Підвал: сторінки ліворуч, фото, замок, закріпити й видалити праворуч; тісно — переноситься */}
       <div className="notebook-sheet-footer mt-4 flex flex-wrap items-center gap-2 pt-2">
-        <div className="notebook-page-controls flex flex-1 justify-start">
+        <div className="notebook-page-controls flex min-w-0 max-w-full flex-[1_1_180px] justify-start">
           <div
             role="tablist"
             aria-label="Сторінки"
-            className="flex shrink-0 items-center gap-0.5 rounded-[22px] bg-paper-line p-[3px]"
+            className="flex min-w-0 max-w-full items-center gap-0.5 overflow-x-auto overscroll-x-contain rounded-[22px] bg-paper-line p-[3px]"
             onKeyDown={(e) => {
               const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
               if (!dir) return
@@ -392,7 +392,7 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
                   if (pages.length > 1 && !locked) setPageMenu({ x: e.clientX, y: e.clientY, index: i })
                 }}
                 className={cn(
-                  'size-9 rounded-full text-[14px] font-extrabold tabular-nums transition-[background-color,color,transform] duration-200 active:scale-[0.88]',
+                  'size-9 shrink-0 rounded-full text-[14px] font-extrabold tabular-nums transition-[background-color,color,transform] duration-200 active:scale-[0.88]',
                   i === page ? 'bg-canvas text-white' : 'text-paper-muted hover:text-ink',
                 )}
               >
@@ -404,7 +404,7 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
                 onClick={addPage}
                 aria-label="Нова сторінка"
                 data-tip="Нова сторінка"
-                className="grid size-9 place-items-center rounded-full text-paper-muted transition-[color,transform] hover:text-ink active:scale-[0.88]"
+                className="grid size-9 shrink-0 place-items-center rounded-full text-paper-muted transition-[color,transform] hover:text-ink active:scale-[0.88]"
               >
                 <Icon name="plus" size={15} strokeWidth={2.6} />
               </button>
