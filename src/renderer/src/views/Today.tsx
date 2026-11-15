@@ -76,24 +76,25 @@ export function Today({
           />
 
           {now ? (
-            // Назва справи — фокусна точка, акцент веде до однієї дії.
-            <Card tone="paper" className="flex flex-col gap-6 p-6">
-              <PulseChip tone="paper" icon="target" className="self-start border border-paper-line">
+            // Герой картки — сама задача; дія — тиха кругла кнопка, зелений лише на «Зараз»
+            <Card tone="paper" className="flex flex-col gap-5 p-7">
+              <PulseChip tone="growth" dot="#090a0a" className="self-start">
                 Зараз{now.when !== 'any' ? ` · ${WHEN_OPTIONS.find((o) => o.value === now.when)?.label}` : ''}
               </PulseChip>
-              <div className="min-w-0">
-                <h2 className="now-title text-[36px] leading-[1.1] font-bold tracking-[-0.035em] break-words">{now.title}</h2>
-                {now.firstStep && <p className="mt-4 text-[15px] font-normal text-paper-muted">{now.stepsDone ? 'Наступний крок' : 'Перший крок'}: {now.firstStep}</p>}
+              <div className="flex items-end gap-4">
+                <div className="min-w-0 flex-1">
+                  <h2 className="now-title text-[44px] leading-[0.95] font-extrabold tracking-[-0.04em] break-words">{now.title}</h2>
+                  {now.firstStep && <p className="mt-3 text-[15px] font-semibold text-paper-muted">{now.stepsDone ? 'Наступний крок' : 'Перший крок'}: {now.firstStep}</p>}
+                </div>
+                <button
+                  onClick={() => onOpen(now.id)}
+                  aria-label={`Почати: ${now.title}`}
+                  data-tip="Почати"
+                  className="grid size-14 shrink-0 place-items-center rounded-full bg-canvas text-white transition hover:-translate-y-0.5 active:scale-[0.97]"
+                >
+                  <Icon name="play" size={20} />
+                </button>
               </div>
-              <Button
-                variant="pulse"
-                iconLeft="play"
-                onClick={() => onOpen(now.id)}
-                aria-label={`Почати: ${now.title}`}
-                className="self-start"
-              >
-                Почати
-              </Button>
             </Card>
           ) : null}
 
@@ -208,11 +209,11 @@ function PlanDay({
     />
   )
   return (
-    <section className="flex flex-col gap-2 rounded-tile border border-hairline bg-tile p-4 pt-6">
-      <div className="flex items-start justify-between gap-4 px-2 pb-2">
+    <section className="flex flex-col gap-2 rounded-tile bg-tile p-4 pt-7">
+      <div className="flex items-start justify-between gap-4 px-3 pb-2">
         <div>
-          <h2 className="text-[22px] leading-tight font-semibold tracking-[-0.02em]">План на день</h2>
-          <p className="mt-2 text-[14px] font-normal text-grey">
+          <h2 className="text-[30px] leading-[1.05] font-extrabold tracking-[-0.03em]">План на день</h2>
+          <p className="mt-2 text-[15px] font-medium text-grey">
             Візьміть ще {mainLeft} {mainLeft === 1 ? 'головну' : 'головні'}. Потім кожній — «коли»: так вона справді станеться.
           </p>
         </div>

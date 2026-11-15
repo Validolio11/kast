@@ -45,7 +45,7 @@ export function AppHeader<T extends string>({
   windowControls?: ReactNode
 }) {
   return (
-    <header className="app-header drag grid min-h-[76px] shrink-0 grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-4 border-b border-hairline py-4 pr-4 pl-6 select-none">
+    <header className="app-header drag grid min-h-[76px] shrink-0 grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-4 py-4 pr-4 pl-6 select-none">
       <KastMark />
       <span className="mobile-current-title">{tabs.find((t) => t.id === active)?.label}</span>
       <nav aria-label="Розділи" className="app-nav flex justify-center gap-1">
@@ -59,12 +59,12 @@ export function AppHeader<T extends string>({
               data-tip={t.tip}
               className={cn(
                 'app-nav-item no-drag inline-flex h-11 shrink-0 items-center gap-2 rounded-full px-5 text-[15px] whitespace-nowrap transition-colors duration-150 max-[900px]:px-4',
-                on ? 'bg-tile font-semibold text-paper' : 'font-medium text-grey hover:bg-tile hover:text-paper',
+                on ? 'bg-paper font-extrabold text-ink' : 'font-semibold text-grey hover:bg-tile hover:text-paper',
               )}
             >
               {t.icon && <Icon name={t.icon} size={21} className="mobile-nav-icon" />}
               <span>{t.label}</span>
-              {!!t.count && <span className={cn('app-nav-count text-[13px] font-medium tabular-nums', on ? 'text-soft' : 'text-muted')}>{t.count}</span>}
+              {!!t.count && <span className={cn('app-nav-count text-[13px] font-bold tabular-nums', on ? 'text-paper-muted' : 'text-muted')}>{t.count}</span>}
             </button>
           )
         })}
@@ -141,18 +141,19 @@ export function RoundButton({
 
 /* ───────────── Сторінка ───────────── */
 /**
- * Компактний заголовок: контекст сірим, головна частина напівжирним.
- * Природний перенос залишає більше місця для справ і нотаток.
+ * Заголовок сторінки: два рядки великими — тонкий над жирним.
+ * Покращення до Pulse: розмір тягнеться від 44 до 80px за шириною й висотою вікна,
+ * щоб на ноутбуці заголовок не з'їдав половину екрана.
  */
 export function PageHead({ light, heavy, sub, actions }: { light: string; heavy: string; sub?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="page-head mb-6 flex animate-enter items-start justify-between gap-6">
-      <div className="flex min-w-0 flex-col items-start gap-3">
-        <h1 className="text-[clamp(32px,4vw,48px)] leading-[1.1] tracking-[-0.035em]">
-          <span className="font-normal text-grey">{light} </span>
-          <span className="font-bold">{heavy}</span>
+    <div className="page-head mb-7 flex animate-enter items-start justify-between gap-5">
+      <div className="flex min-w-0 flex-col items-start gap-3.5">
+        <h1 className="text-[clamp(44px,min(6vw,9vh),80px)] leading-[0.92] tracking-[-0.035em] uppercase">
+          <span className="block font-light">{light}</span>
+          <span className="block font-extrabold">{heavy}</span>
         </h1>
-        {sub && <div className="text-[14px] font-medium text-grey">{sub}</div>}
+        {sub && <div className="text-[14px] font-bold text-grey">{sub}</div>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
     </div>
@@ -169,11 +170,11 @@ export function PageGrid({ side, main, fill }: { side: ReactNode; main: ReactNod
       )}
     >
       {/* fill: ліва колонка не розтягує рядок (h-0), а займає рівно висоту основної */}
-      <div className={cn('page-grid-side enter-stagger flex min-w-0 flex-col gap-4 [--enter-base:40ms]', fill && 'min-[1040px]:h-0 min-[1040px]:min-h-full')}>
+      <div className={cn('page-grid-side enter-stagger flex min-w-0 flex-col gap-3 [--enter-base:80ms]', fill && 'min-[1040px]:h-0 min-[1040px]:min-h-full')}>
         {side}
       </div>
       {/* Перший список у колонці починається без верхнього відступу — рівно з полем ліворуч */}
-      <div className={cn('page-grid-main enter-stagger flex min-w-0 flex-col gap-4 [--enter-base:80ms] [&>section:first-child>h2]:mt-0')}>
+      <div className={cn('page-grid-main enter-stagger flex min-w-0 flex-col gap-3 [--enter-base:160ms] [&>section:first-child>h2]:mt-0')}>
         {main}
       </div>
     </div>
@@ -190,7 +191,7 @@ export interface CaptureFieldProps extends Omit<InputHTMLAttributes<HTMLInputEle
   action?: { icon: IconName; label: string; onClick: () => void }
 }
 
-/** Поле 56px на tile: пишеш і Enter. Фокус — тонка внутрішня зелена обвідка. */
+/** Капсула 56px на tile: пишеш і Enter. Фокус — внутрішня зелена обвідка, як у пошуку Karkas. */
 export const CaptureField = forwardRef<HTMLInputElement, CaptureFieldProps>(function CaptureField(
   { icon = 'plus', onSubmit, search, action, className, value, autoFocus, ...rest },
   ref,
@@ -203,8 +204,8 @@ export const CaptureField = forwardRef<HTMLInputElement, CaptureFieldProps>(func
         if (has) onSubmit((value as string).trim())
       }}
       className={cn(
-        'group flex h-14 shrink-0 items-center gap-3 rounded-field border border-hairline bg-tile pr-2 pl-4 transition-shadow duration-150',
-        'focus-within:shadow-[inset_0_0_0_1px_var(--color-growth)]',
+        'group flex h-14 shrink-0 items-center gap-3 rounded-full bg-tile pr-1.5 pl-5 transition-shadow duration-150',
+        'focus-within:shadow-[inset_0_0_0_2px_var(--color-growth)]',
         className,
       )}
     >
@@ -213,15 +214,14 @@ export const CaptureField = forwardRef<HTMLInputElement, CaptureFieldProps>(func
         ref={ref}
         value={value}
         autoFocus={autoFocus && !matchMedia('(max-width: 767px)').matches}
-        aria-label={rest['aria-label'] ?? rest.placeholder ?? (search ? 'Пошук' : 'Нова справа')}
-        className="h-full min-w-0 flex-1 bg-transparent text-[16px] font-normal text-paper caret-growth outline-none placeholder:text-muted"
+        className="h-full min-w-0 flex-1 bg-transparent text-[16px] font-semibold text-paper caret-growth outline-none placeholder:text-muted"
         {...rest}
       />
       {has && !search ? (
         <button
           type="submit"
           aria-label="Додати"
-          className="grid size-10 origin-right shrink-0 animate-pop place-items-center rounded-control bg-growth text-ink transition active:scale-95"
+          className="grid size-11 shrink-0 animate-pop place-items-center rounded-full bg-paper text-ink transition active:scale-90"
         >
           <Icon name="arrowRight" size={18} />
         </button>
@@ -245,8 +245,8 @@ export const CaptureField = forwardRef<HTMLInputElement, CaptureFieldProps>(func
 /* ───────────── Картка ───────────── */
 export type CardTone = 'tile' | 'paper' | 'growth' | 'data' | 'steel' | 'outline'
 const cardTone: Record<CardTone, string> = {
-  tile: 'border border-hairline bg-tile text-white',
-  paper: 'border border-paper-line bg-paper text-ink shadow-[0_2px_8px_rgb(0_0_0/0.12),0_12px_32px_rgb(0_0_0/0.16)]',
+  tile: 'bg-tile text-white',
+  paper: 'bg-paper text-ink',
   growth: 'bg-growth text-ink',
   data: 'bg-data text-white',
   steel: 'bg-steel text-white',
@@ -261,7 +261,7 @@ export function Card({ tone = 'tile', className, children, style }: { tone?: Car
   )
 }
 
-/** Заголовок списку 18px/600 з тихою цифрою */
+/** Заголовок списку 22px/800 з тихою цифрою */
 export function ListTitle({
   children,
   count,
@@ -283,9 +283,9 @@ export function ListTitle({
     </>
   )
   return (
-    <h2 className="mt-4 mb-2 ml-4 flex items-center gap-3 text-[18px] font-semibold tracking-[-0.02em]">
+    <h2 className="mt-4 mb-1 ml-3.5 flex items-center gap-2.5 text-[22px] font-extrabold tracking-[-0.02em]">
       {collapsible ? (
-        <button onClick={onToggle} aria-expanded={open} className="flex items-center gap-3 rounded-control">
+        <button onClick={onToggle} aria-expanded={open} className="flex items-center gap-2.5 rounded-full">
           {inner}
         </button>
       ) : (
@@ -324,7 +324,7 @@ export function ListSection({
 }
 
 /* ───────────── Рядок задачі ───────────── */
-/** Рядок 64px з тонкою обвідкою; дії з'являються при наведенні й фокусі */
+/** Капсула 60px з тонкою обвідкою tile; дії з'являються при наведенні */
 /** Сторінка ще з'являється (перша секунда): рядки, що вже є, їдуть разом зі своєю секцією */
 export const EnteringContext = createContext(false)
 
@@ -372,7 +372,7 @@ export function PulseRow({
   return (
     <div
       className={cn(
-        'pulse-row group relative flex min-h-[64px] items-center gap-4 rounded-row px-4 transition-colors duration-150',
+        'pulse-row group relative flex min-h-[60px] items-center gap-3.5 rounded-[30px] pr-4 pl-3.5 transition-colors duration-150',
         enter,
         finishing && 'animate-row-away',
         selected ? 'bg-steel' : 'shadow-[inset_0_0_0_1px_var(--color-tile)] hover:bg-tile',
@@ -404,10 +404,10 @@ export function PulseRow({
         </div>
       )}
       <div className="min-w-0 flex-1 py-3">
-        <div className={cn('truncate text-[15px] font-medium text-white', muted && 'text-grey', done && 'text-muted line-through decoration-dim')}>
+        <div className={cn('truncate text-[15px] font-semibold text-white', muted && 'text-grey', done && 'text-muted line-through decoration-violet decoration-2')}>
           {title}
         </div>
-        {sub && <div className="mt-1 truncate text-[13px] font-normal text-grey">{sub}</div>}
+        {sub && <div className="mt-0.5 truncate text-[13px] font-semibold text-muted">{sub}</div>}
       </div>
       {actions && (
         <div
@@ -722,28 +722,28 @@ export function InfoRow({
   progress?: number
   tip?: string
 }) {
-  // Прогрес залишається тихою доріжкою, щоб не конкурувати з головною дією.
+  // На фіолетовій заливці прогресу сірий текст губиться — світліший
   const filled = progress !== undefined && progress > 0
   return (
     <div
       data-tip={tip}
       className={cn(
-        'relative flex min-h-[64px] shrink-0 items-center gap-3 overflow-hidden rounded-row py-3 pr-2 pl-4',
-        'shadow-[inset_0_0_0_1px_var(--color-hairline)]',
+        'relative flex min-h-[60px] shrink-0 items-center gap-3.5 overflow-hidden rounded-[30px] py-2 pr-2 pl-5',
+        tone === 'accent' ? 'shadow-[inset_0_0_0_1px_var(--color-growth)]' : 'shadow-[inset_0_0_0_1px_var(--color-tile)]',
       )}
     >
-      {/* Тонка нейтральна доріжка залишає текст на стабільному фоні. */}
+      {/* Прогрес — капсула всередині рядка з відступом 6px; не вужча за власну висоту */}
       {filled && (
         <div
           aria-hidden
-          className="pointer-events-none absolute bottom-0 left-0 h-0.5 bg-soft transition-[width] duration-300 ease-pulse"
-          style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+          className="pointer-events-none absolute inset-y-1.5 left-1.5 animate-grow-in rounded-[24px] bg-data transition-[width] duration-700 ease-pulse [--grow-from:48px]"
+          style={{ width: `max(48px, calc((100% - 12px) * ${Math.min(100, progress) / 100}))` }}
         />
       )}
-      <Icon name={icon} size={18} className="relative shrink-0 text-grey" />
-      <p className="relative min-w-0 flex-1 text-[14px] font-normal text-grey">
-        <span className={tone === 'accent' ? 'font-semibold text-paper' : 'font-medium text-paper'}>{title}</span>
-        {text && <span className="block text-[13px]">{text}</span>}
+      <Icon name={icon} size={18} className={cn('relative shrink-0', tone === 'accent' ? 'text-growth' : filled ? 'text-white/75' : 'text-muted')} />
+      <p className={cn('relative min-w-0 flex-1 truncate text-[15px] font-semibold', filled ? 'text-white/75' : 'text-muted')}>
+        <span className={tone === 'accent' ? 'text-growth' : 'text-white'}>{title}</span>
+        {text && <span> · {text}</span>}
       </p>
       {children && <div className="relative flex shrink-0 items-center gap-2 pr-2">{children}</div>}
     </div>
@@ -886,17 +886,13 @@ export function ContextMenu({
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
-    // Layout dimensions stay stable while the panel is scaling in.
-    const { offsetWidth: width, offsetHeight: height } = el
+    const { width, height } = el.getBoundingClientRect()
     const room = innerHeight - 16
-    const left = Math.max(8, Math.min(x, innerWidth - width - 8))
-    const top = height > room ? 8 : Math.max(8, Math.min(y + height > innerHeight - 8 ? y - height : y, innerHeight - height - 8))
+    if (height > room) return setPos({ left: Math.max(8, Math.min(x, innerWidth - width - 8)), top: 8, maxHeight: room, overflowY: 'auto' })
     setPos({
-      left,
-      top,
-      '--menu-origin': `${Math.max(0, Math.min(width, x - left))}px ${Math.max(0, Math.min(height, y - top))}px`,
-      ...(height > room ? { maxHeight: room, overflowY: 'auto' } : {}),
-    } as CSSProperties)
+      left: Math.max(8, Math.min(x, innerWidth - width - 8)),
+      top: Math.max(8, Math.min(y + height > innerHeight - 8 ? y - height : y, innerHeight - height - 8)),
+    })
   }, [x, y])
 
   useEffect(() => {
@@ -957,7 +953,7 @@ export function ContextMenu({
         if ((e.target as HTMLElement).closest('button')) e.preventDefault()
       }}
       onContextMenu={(e) => e.preventDefault()}
-      className="context-menu no-drag fixed z-[130] flex w-[288px] [transform-origin:var(--menu-origin,top_left)] animate-menu-in flex-col gap-1 rounded-field bg-canvas p-2 text-white shadow-menu"
+      className="context-menu no-drag fixed z-[130] flex w-[288px] origin-top-left animate-menu-in flex-col gap-0.5 rounded-[26px] bg-canvas p-1.5 text-white shadow-menu"
       style={pos}
     >
       {header && <div className="mb-1 border-b border-tile px-1 pt-1 pb-2.5">{header}</div>}

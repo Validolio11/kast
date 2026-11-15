@@ -25,8 +25,8 @@ export function Popover({
       {open && (
         <div
           className={cn(
-            'absolute top-full z-40 mt-2 animate-menu-in rounded-field bg-graphite p-3 shadow-popover',
-            align === 'end' ? 'right-0 origin-top-right' : 'left-0 origin-top-left',
+            'absolute top-full z-40 mt-3 origin-top animate-menu-in rounded-tile bg-graphite p-3 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.9)] ring-1 ring-white/10',
+            align === 'end' ? 'right-0' : 'left-0',
             panelClassName,
           )}
         >
