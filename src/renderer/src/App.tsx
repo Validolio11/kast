@@ -12,7 +12,8 @@ import { cleanupFiles } from '@/data/files'
 import { startAndroidUpdates } from '@/lib/androidUpdate'
 import { Done } from '@/views/Done'
 import { Inbox } from '@/views/Inbox'
-import { Notebook } from '@/views/Notebook'
+import { Notebook, type OpenNote } from '@/views/Notebook'
+import { QuickSwitcher } from '@/components/QuickSwitcher'
 import { Settings } from '@/views/Settings'
 import { Today } from '@/views/Today'
 
@@ -62,11 +63,14 @@ function Shell() {
   const [focusId, setFocusId] = useState<string | null>(null)
   const [closing, setClosing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [switcher, setSwitcher] = useState(false)
+  const [openNote, setOpenNote] = useState<OpenNote>(null)
+  const clearOpenNote = useCallback(() => setOpenNote(null), [])
   const [maximized, setMaximized] = useState(false)
   const [pageHeader, setPageHeader] = useState<HTMLDivElement | null>(null)
-  const [desktop, setDesktop] = useState(() => matchMedia('(min-width: 768px)').matches)
+  const [desktop, setDesktop] = useState(() => matchMedia('(min-width: 760px)').matches)
   useEffect(() => {
-    const query = matchMedia('(min-width: 768px)')
+    const query = matchMedia('(min-width: 760px)')
     const change = () => setDesktop(query.matches)
     query.addEventListener('change', change)
     return () => query.removeEventListener('change', change)
@@ -120,7 +124,7 @@ function Shell() {
   const go = useCallback((t: Tab) => {
     setFocusId(null)
     setTab(t)
-    if (!matchMedia('(max-width: 767px)').matches) requestAnimationFrame(() => captureRef.current?.focus())
+    if (!matchMedia('(max-width: 759px)').matches) requestAnimationFrame(() => captureRef.current?.focus())
   }, [])
 
   useEffect(() => {
@@ -162,7 +166,7 @@ function Shell() {
     [go, toast],
   )
 
-  // Гарячі клавіші: Ctrl+1..4 — вкладки, Ctrl+N — поле запису, Ctrl+, — налаштування
+  // Гарячі клавіші: Ctrl+1..4 — вкладки, Ctrl+N — поле запису, Ctrl+P — швидкий пошук нотаток, Ctrl+, — налаштування
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.altKey) return
@@ -174,6 +178,10 @@ function Shell() {
         e.preventDefault()
             setFocusId(null)
         requestAnimationFrame(() => captureRef.current?.focus())
+      } else if (e.key.toLowerCase() === 'p' || e.code === 'KeyP') {
+        // Швидкий пошук нотаток з будь-якої вкладки
+        e.preventDefault()
+        setSwitcher(true)
       } else if (e.key === ',') {
         e.preventDefault()
             setSettingsOpen(true)
@@ -226,7 +234,7 @@ function Shell() {
         ) : tab === 'today' ? (
           <Today date={date} eveningHour={settings.eveningHour} captureRef={captureRef} onOpen={onOpen} onCloseDay={() => setClosing(true)} />
         ) : tab === 'notebook' ? (
-          <Notebook captureRef={captureRef} />
+          <Notebook captureRef={captureRef} openNote={openNote} onOpened={clearOpenNote} />
         ) : tab === 'inbox' ? (
           <Inbox captureRef={captureRef} hotkey={settings.hotkey} onOpen={onOpen} />
         ) : (
@@ -237,6 +245,15 @@ function Shell() {
       </div>
       <CloseDay open={closing} onClose={() => setClosing(false)} />
       <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <QuickSwitcher
+        open={switcher}
+        onClose={() => setSwitcher(false)}
+        onPick={(id) => {
+          setFocusId(null)
+          setTab('notebook')
+          setOpenNote({ id, n: Date.now() })
+        }}
+      />
       <AccountSwitch switching={sync.switching} email={sync.email} />
     </div>
   )

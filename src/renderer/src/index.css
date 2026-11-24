@@ -633,19 +633,43 @@
   }
 }
 
+/* Число в Stepper прокручується: --roll-dir 1 — нове знизу, −1 — згори (пружина Pulse) */
+@keyframes roll-in { from { transform: translateY(calc(var(--roll-dir, 1) * 100%)); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes roll-out { to { transform: translateY(calc(var(--roll-dir, 1) * -100%)); opacity: 0; } }
+.roll-in { animation: roll-in 420ms var(--ease-spring) both; }
+.roll-out { animation: roll-out 240ms ease-in both; }
+
+/* Компактний перемикач: 4 в ряд, якщо вміщаються, інакше 2×2 */
+.seg-tabs-host { container-type: inline-size; }
+.seg-tabs-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* непарний останній у сітці 2×2 займає весь рядок; коли місця досить — усі в один ряд порівну */
+/* Рахуємо лише пункти: перша дитина сітки — рухома пігулка, вона не пункт */
+.seg-tabs-compact > :nth-last-child(1 of [role='radio']):nth-child(odd of [role='radio']) { grid-column: 1 / -1; }
+@container (min-width: 340px) {
+  .seg-tabs-compact { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .seg-tabs-compact > :nth-last-child(1 of [role='radio']):nth-child(odd of [role='radio']) { grid-column: auto; }
+}
+
+/* «Зараз»: розмір назви за найдовшим словом — слово ніколи не рветься; дуже довга назва — до 5 рядків */
+.now-text { container-type: inline-size; }
+/* Не дрібніше 22px: якщо й так слово не вміщається (посилання) — переноситься посеред слова */
+.now-title { font-size: max(22px, min(var(--now-size, 44px), calc(100cqi / (var(--now-longest, 8) * 0.66)))); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; }
+
 /* Меню зліва та заголовок у шапці — лише для комп’ютера. */
 :root { --kast-gutter: 24px; --kast-layout-gap: clamp(20px, 2vw, 32px); }
 .app-workspace { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
 .app-page-content { max-width: 100%; padding-inline: var(--kast-gutter); }
 .desktop-app-header, .app-sidebar { display: none; }
-.notebook-page-controls [role='tablist'] { scrollbar-width: thin; }
+/* Смужка сторінок гортається вбік без системних смуг прокрутки (зі стрілками вони займали більше місця, ніж самі сторінки) */
+.notebook-page-controls [role='tablist'] { scrollbar-width: none; }
 .notebook-canvas .note-editor { overflow-wrap: anywhere; }
 .app-header-actions [data-tip]::after,
-.notebook-convert-action[data-tip]::after,
-.notebook-sheet-footer [data-tip]::after { left: auto; right: 0; --tip-x: 0%; }
-.notebook-sheet-footer [data-tip]::after { top: auto; bottom: calc(100% + 10px); }
+.notebook-sheet-meta [data-tip]::after,
+.focus-notes [data-tip]::after { left: auto; right: 0; --tip-x: 0%; }
+/* Підказка над кнопкою — коли під нею край картки, що обрізає вміст */
+[data-tip-side='top']::after { top: auto; bottom: calc(100% + 10px); }
 
-@media (min-width: 768px) {
+@media (min-width: 760px) {
   .mobile-app-header { display: none; }
   .app-main { container: workspace / inline-size; }
   .app-shell { --kast-titlebar-height: 76px; }
@@ -665,13 +689,15 @@
   .app-sidebar-footer { flex-shrink: 0; padding: 12px; border-top: 1px solid var(--color-hairline); }
   .notebook-back, .notebook-page-menu { display: none; }
   .notebook-list { flex: 1; }
+  /* На великому моніторі рядки не тягнуться на весь екран: назва й мітка «коли» лишаються поруч */
   .page-grid { grid-template-columns: minmax(0, 1fr); gap: var(--kast-layout-gap); }
+  .app-page-content > * { max-width: 1440px; }
   .app-page-content-fill { height: 100%; min-height: 400px; padding-bottom: 24px; }
   .page-grid-fill { min-height: 0; flex: 1; grid-template-rows: minmax(0, 1fr); }
   .page-grid-fill > .page-grid-side, .page-grid-fill > .page-grid-main { min-height: 0; height: 100%; }
   .page-grid-fill .notebook-sheet { min-height: 0; height: 100%; }
   @container workspace (min-width: 960px) {
-    .page-grid { grid-template-columns: minmax(280px, min(28cqw, 360px)) minmax(0, 1fr); }
+    .page-grid { grid-template-columns: minmax(320px, min(32cqw, 400px)) minmax(0, 1fr); }
   }
   @container workspace (max-width: 959px) {
     .notebook-view[data-detail='false'] .page-grid-main { display: none; }
@@ -679,7 +705,7 @@
     .notebook-view .notebook-back { display: inline-flex; flex-shrink: 0; align-items: center; align-self: flex-start; gap: 6px; min-height: 40px; margin-top: -8px; margin-bottom: 8px; padding: 0 8px 0 2px; border-radius: 20px; color: var(--color-paper-muted); font-size: 14px; font-weight: 800; }
   }
 }
-@media (min-width: 768px) and (max-width: 1199px) {
+@media (min-width: 760px) and (max-width: 1199px) {
   .app-sidebar { flex-basis: 76px; width: 76px; }
   .app-sidebar-brand { justify-content: center; padding-inline: 0; }
   .app-sidebar .sidebar-label { display: none; }
@@ -691,7 +717,7 @@
 
 /* Телефон: ті самі компоненти Pulse, компактна шапка й навігація під великий палець. */
 .mobile-current-title, .mobile-nav-icon, .notebook-back, .notebook-page-menu { display: none; }
-@media (max-width: 767px) {
+@media (max-width: 759px) {
   :root {
     --kast-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
     --kast-safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
@@ -747,10 +773,7 @@
   .notebook-sheet-meta { flex-wrap: nowrap; gap: 6px; }
   .notebook-sheet-meta > span:not([class*='chip']) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
   .notebook-convert-action { flex-shrink: 0; height: 36px; padding-inline: 12px; font-size: 13px; }
-  .notebook-sheet > input { flex-shrink: 0; margin-top: 14px; font-size: 28px; }
-  .notebook-sheet > input + div { margin-top: 16px; }
-  .notebook-sheet-footer { gap: 6px; margin-top: 12px; padding-top: 12px; }
-  .notebook-page-controls { order: -1; flex: 1 1 100%; min-width: 0; justify-content: flex-start; align-items: center; gap: 6px; }
+  .notebook-doc { padding-top: 16px; }
   .notebook-page-controls [role='tablist'] { min-width: 0; flex-shrink: 1; overflow-x: auto; overscroll-behavior-x: contain; }
   .notebook-page-controls [role='tablist'] > button { width: 40px; height: 40px; flex-shrink: 0; }
   .notebook-page-menu { display: grid; width: 44px; height: 44px; flex-shrink: 0; place-items: center; border-radius: 22px; background: var(--color-paper-line); }
@@ -782,14 +805,14 @@
 }
 
 /* Телефон: шліфування — компактніші заголовки, перенос назв, порядок карток у Фокусі */
-@media (max-width: 767px) {
+@media (max-width: 759px) {
   /* Смуги прокрутки на Android не показують — прибираємо і тут */
   * { scrollbar-width: none; }
   *::-webkit-scrollbar { display: none; }
   /* Назва вкладки вже є в шапці — великий заголовок сторінки компактніший */
   .page-head { margin-bottom: 18px; }
   /* Картка «Зараз»: назва переноситься цілими словами, а не посеред слова */
-  .now-title { font-size: clamp(28px, 8.4vw, 36px); line-height: 1; overflow-wrap: break-word; hyphens: auto; }
+  .now-title { font-size: max(20px, min(clamp(28px, 8.4vw, 36px), calc(100cqi / (var(--now-longest, 8) * 0.66)))); line-height: 1; }
   /* Лічильник у навігації — маленька капсула на іконці */
   .app-nav-count {
     top: 4px; right: auto; left: calc(50% + 7px);
@@ -800,8 +823,6 @@
   .app-nav-item[aria-current='page'] .app-nav-count { background: var(--color-canvas); }
   /* Назви задач — до двох рядків замість обрізання на півслові */
   .pulse-row .truncate { display: -webkit-box; overflow: hidden; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-  /* Блокнот: сторінки й кнопки в одному ряду */
-  .notebook-page-controls { flex: 1 1 auto; }
   /* Фокус: спершу крок, потім таймер і нотатки; налаштування задачі — нижче */
   .focus-view .page-grid { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
   .focus-view .page-grid-side, .focus-view .page-grid-main { display: contents; }

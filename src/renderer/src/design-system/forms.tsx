@@ -167,19 +167,39 @@ export function Stepper({
     <div role="group" aria-label={label} className={cn('flex items-center', sm ? 'gap-2' : 'gap-4')}>
       <StepBtn sm={sm} icon="minus" label="Менше" disabled={value <= min} onClick={() => onChange(Math.max(min, value - 1))} />
       <div className={cn('text-center', sm ? 'min-w-12' : 'min-w-16')}>
-        <div
-          key={value}
-          className={cn('animate-pop leading-none font-bold tabular-nums', sm ? 'text-[17px] tracking-tight' : 'text-[48px] tracking-[-0.04em]')}
-        >
-          {value}
+        <RollNumber value={value} className={cn('leading-none font-bold tabular-nums', sm ? 'text-[17px] tracking-tight' : 'text-[48px] tracking-[-0.04em]')}>
           {sm && unit}
-        </div>
+        </RollNumber>
         {unit && !sm && <div className="mt-1 text-[13px] font-semibold text-fog">{unit}</div>}
       </div>
       <StepBtn sm={sm} icon="plus" label="Більше" disabled={value >= max} onClick={() => onChange(Math.min(max, value + 1))} />
     </div>
   )
 }
+/**
+ * Число, що прокручується (Number stepper): більше — нове заходить знизу, старе йде вгору; менше — навпаки.
+ * Під «Зменшити рух» анімації вкорочує загальне правило в index.css.
+ */
+function RollNumber({ value, className, children }: { value: number; className?: string; children?: ReactNode }) {
+  const [roll, setRoll] = useState<{ cur: number; old: number | null; dir: number }>({ cur: value, old: null, dir: 1 })
+  if (roll.cur !== value) setRoll({ cur: value, old: roll.cur, dir: value > roll.cur ? 1 : -1 })
+  const dir = { '--roll-dir': roll.dir } as CSSProperties
+  return (
+    <div className="relative overflow-hidden py-1" style={dir}>
+      <div key={`n${roll.cur}`} className={cn(roll.old !== null && 'roll-in', className)}>
+        {roll.cur}
+        {children}
+      </div>
+      {roll.old !== null && (
+        <div key={`o${roll.old}-${roll.cur}`} aria-hidden className={cn('roll-out absolute inset-x-0 top-1', className)} onAnimationEnd={() => setRoll((r) => ({ ...r, old: null }))}>
+          {roll.old}
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function StepBtn({ icon, label, sm, ...rest }: { icon: IconName; label: string; sm?: boolean; disabled?: boolean; onClick: () => void }) {
   return (
     <button

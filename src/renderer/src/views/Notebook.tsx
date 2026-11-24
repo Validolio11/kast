@@ -1,28 +1,43 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, CaptureField, cn, ContextMenu, InfoRow, Icon, PulseChip, RoundButton, useRowEnter, useToast } from '@/design-system'
+import { Button, CaptureField, cn, ContextMenu, InfoRow, Icon, PulseChip, RoundButton, useRowEnter, useToast, type MenuAction } from '@/design-system'
 import { Page } from '@/components/Page'
 import { useNotes } from '@/data/hooks'
 import { EmojiPicker } from '@/components/EmojiPicker'
-import { createNote, notePreview, noteTitle, removeNote, updateNote } from '@/data/notes'
+import { createNote, noteTitle, removeNote, updateNote } from '@/data/notes'
 import { captureToInbox } from '@/data/tasks'
 import { RichNote, type RichNoteHandle } from '@/components/RichNote'
-import { AddImageButton, DropHint, useImageDrop } from '@/components/Attachments'
+import { DropHint, pickImages, useImageDrop } from '@/components/Attachments'
 import { db } from '@/data/db'
 import { htmlToText, textToHtml } from '@/components/richText'
 import type { Note } from '@/data/db'
-import { age, fmtTime, pluralWord } from '@/lib/time'
+import { age, dayKey, fmtTime, pluralWord } from '@/lib/time'
 
-export function Notebook({ captureRef }: { captureRef: React.RefObject<HTMLInputElement | null> }) {
+/** Відкрити конкретну нотатку ззовні (швидкий пошук Ctrl+P); n — щоб той самий id відкривався повторно */
+export type OpenNote = { id: string; n: number } | null
+
+export function Notebook({ captureRef, openNote, onOpened }: { captureRef: React.RefObject<HTMLInputElement | null>; openNote?: OpenNote; onOpened?: () => void }) {
   const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState<string | null>(null)
-  const [mobileDetail, setMobileDetail] = useState(false)
-  const titleRef = useRef<HTMLInputElement>(null)
+  const [selected, setSelected] = useState<string | null>(openNote?.id ?? null)
+  const [mobileDetail, setMobileDetail] = useState(!!openNote)
+  const titleRef = useRef<HTMLTextAreaElement>(null)
   const loaded = useNotes()
   const notes = loaded ?? []
 
   const q = query.trim().toLowerCase()
   const shown = q ? notes.filter((n) => n.body.toLowerCase().includes(q)) : notes
   const current = notes.find((n) => n.id === selected) ?? shown[0]
+  // Як у Notion: закріплені окремою групою вгорі, далі — усі за свіжістю
+  const pinned = shown.filter((n) => n.pinned)
+  const rest = shown.filter((n) => !n.pinned)
+
+  useEffect(() => {
+    if (!openNote) return
+    setQuery('')
+    setSelected(openNote.id)
+    setMobileDetail(true)
+    // Запит виконано — наступний вхід у блокнот не відкриватиме цю нотатку знову
+    onOpened?.()
+  }, [openNote, onOpened])
 
   const backToList = useCallback(() => setMobileDetail(false), [])
   useEffect(() => {
@@ -43,13 +58,18 @@ export function Notebook({ captureRef }: { captureRef: React.RefObject<HTMLInput
     setMobileDetail(true)
     requestAnimationFrame(() => titleRef.current?.focus())
   }
+  const open = (id: string) => {
+    setSelected(id)
+    setMobileDetail(true)
+  }
+  const row = (n: Note) => <NoteRow key={n.id} note={n} selected={n.id === current?.id} onOpen={() => open(n.id)} />
 
   return (
     <div className="notebook-view h-full min-w-0 w-full" data-detail={mobileDetail}>
     <Page
       light="Мій"
       heavy="блокнот"
-      sub={`${notes.length} ${pluralWord(notes.length, ['нотатка', 'нотатки', 'нотаток'])}`}
+      sub={`${notes.length} ${pluralWord(notes.length, ['нотатка', 'нотатки', 'нотаток'])} · Ctrl + P — швидкий пошук`}
       fill
       side={
         <>
@@ -71,14 +91,15 @@ export function Notebook({ captureRef }: { captureRef: React.RefObject<HTMLInput
             action={{ icon: 'plus', label: 'Нова нотатка', onClick: () => create() }}
             autoFocus
           />
-          <div className="notebook-list flex min-h-0 flex-col gap-3 overflow-y-auto pb-1 min-[1040px]:flex-1">
-            {shown.map((n) => (
-              <NoteTile key={n.id} note={n} selected={n.id === current?.id} onClick={() => { setSelected(n.id); setMobileDetail(true) }} />
-            ))}
+          <nav aria-label="Нотатки" className="notebook-list flex min-h-0 flex-col gap-0.5 overflow-y-auto pb-1 min-[1040px]:flex-1">
+            {pinned.length > 0 && <NoteGroup label="Закріплені" />}
+            {pinned.map(row)}
+            {pinned.length > 0 && rest.length > 0 && <NoteGroup label="Усі нотатки" />}
+            {rest.map(row)}
             {loaded && q && !shown.length && (
-              <p className="px-4 py-2 text-[14px] font-semibold text-muted">Нічого не знайдено. Enter — створити нотатку «{query.trim()}».</p>
+              <p className="px-3 py-2 text-[14px] font-semibold text-muted">Нічого не знайдено. Enter — створити нотатку «{query.trim()}».</p>
             )}
-          </div>
+          </nav>
         </>
       }
       main={
@@ -99,38 +120,65 @@ export function Notebook({ captureRef }: { captureRef: React.RefObject<HTMLInput
   )
 }
 
-function NoteTile({ note, selected, onClick }: { note: Note; selected: boolean; onClick: () => void }) {
+function NoteGroup({ label }: { label: string }) {
+  return <h3 className="px-3 pt-3 pb-1 text-[13px] font-extrabold text-grey first:pt-1">{label}</h3>
+}
+
+/** Сьогодні — час; раніше — «вчора», «3 дн», дата */
+const stamp = (ts: number) => (dayKey(new Date(ts)) === dayKey() ? fmtTime(ts) : age(ts))
+
+/** Рядок списку, як у бічній панелі Notion: іконка, назва, коли змінено. Права кнопка — дії. */
+function NoteRow({ note, selected, onOpen }: { note: Note; selected: boolean; onOpen: () => void }) {
   const enter = useRowEnter()
+  const toast = useToast()
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const remove = async () => {
+    setMenu(null)
+    if (note.locked) return toast({ kind: 'info', icon: 'lock', title: 'Нотатку заблоковано', text: 'Відкрийте замок, щоб її видалити' })
+    await removeNote(note.id)
+    toast({ kind: 'info', icon: 'trash', title: 'Нотатку видалено', action: { label: 'Скасувати', onClick: () => updateNote(note.id, { deleted: 0 }) } })
+  }
   return (
-    <button
-      onClick={onClick}
-      aria-current={selected || undefined}
-      className={cn(
-        'flex min-w-0 w-full shrink-0 items-center gap-3 rounded-[30px] px-6 py-[18px] text-left transition-colors duration-150',
-        enter,
-        selected ? 'bg-steel' : 'bg-tile hover:bg-[#2a2a2c]',
-      )}
-    >
-      {note.icon && (
-        <span aria-hidden className="note-tile-icon note-emoji shrink-0 text-[28px]">
-          {note.icon}
+    <>
+      <button
+        onClick={onOpen}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          setMenu({ x: e.clientX, y: e.clientY })
+        }}
+        aria-current={selected || undefined}
+        className={cn(
+          'note-row flex h-10 min-w-0 w-full shrink-0 items-center gap-2.5 rounded-control pr-3 pl-2.5 text-left transition-colors duration-150',
+          enter,
+          selected ? 'bg-steel text-white' : 'text-soft hover:bg-tile hover:text-white',
+        )}
+      >
+        <span aria-hidden className="grid size-6 shrink-0 place-items-center">
+          {note.icon ? <span className="note-emoji text-[17px] leading-none">{note.icon}</span> : <Icon name="notebook" size={16} className={selected ? 'text-soft' : 'text-muted'} />}
         </span>
+        <span className="min-w-0 flex-1 truncate text-[14px] font-bold">{noteTitle(note.body)}</span>
+        <span className={cn('shrink-0 text-[12px] font-semibold tabular-nums', selected ? 'text-soft' : 'text-muted')}>{stamp(note.updatedAt)}</span>
+      </button>
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          label={noteTitle(note.body)}
+          autoFocus
+          onClose={() => setMenu(null)}
+          items={[
+            { label: 'Відкрити', icon: 'arrowUpRight', onSelect: () => (setMenu(null), onOpen()) },
+            { label: note.pinned ? 'Відкріпити' : 'Закріпити вгорі', icon: 'pin', onSelect: () => (setMenu(null), updateNote(note.id, { pinned: note.pinned ? 0 : 1 })) },
+            { label: 'Видалити', icon: 'trashLines', tone: 'danger', onSelect: remove },
+          ]}
+        />
       )}
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[16px] font-extrabold text-white">{noteTitle(note.body)}</span>
-        <span className="mt-1 block truncate text-[13px] font-semibold text-muted">{notePreview(note.body) || age(note.updatedAt)}</span>
-      </span>
-      {!!note.pinned && (
-        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-paper text-ink">
-          <Icon name="pin" size={14} />
-        </span>
-      )}
-    </button>
+    </>
   )
 }
 
 /** Аркуш нотатки: заголовок — перший рядок, далі форматований текст. Зберігається сам. */
-function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: React.RefObject<HTMLInputElement | null>; onDeleted: () => void; onBack: () => void }) {
+function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: React.RefObject<HTMLTextAreaElement | null>; onDeleted: () => void; onBack: () => void }) {
   const toast = useToast()
   const editorRef = useRef<RichNoteHandle>(null)
   const split = (body: string) => {
@@ -143,6 +191,9 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
   const [pages, setPages] = useState(() => pagesOf(note))
   const [page, setPage] = useState(0)
   const [pageMenu, setPageMenu] = useState<{ x: number; y: number; index: number } | null>(null)
+  // Усі дії з нотаткою — в одному меню «…», як у Notion; на аркуші лишається лише текст
+  const [actions, setActions] = useState<{ x: number; y: number } | null>(null)
+  const moreRef = useRef<HTMLSpanElement>(null)
   const draft = useRef({ title: split(note.body)[0], pages: pagesOf(note), texts: pagesOf(note).map(htmlToText) })
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const pending = useRef(false)
@@ -309,136 +360,151 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
     toast({ kind: 'info', icon: locked ? 'lockOpen' : 'lock', title: locked ? 'Редагування увімкнено' : 'Редагування заблоковано', text: locked ? undefined : 'Текст можна читати й копіювати' })
   }
 
+  const removeThis = async () => {
+    setActions(null)
+    if (locked) return toast({ kind: 'info', icon: 'lock', title: 'Нотатку заблоковано', text: 'Відкрийте замок, щоб її видалити' })
+    flush()
+    await removeNote(note.id)
+    onDeleted()
+    toast({ kind: 'info', icon: 'trash', title: 'Нотатку видалено', action: { label: 'Скасувати', onClick: () => updateNote(note.id, { deleted: 0 }) } })
+  }
+  const actionItems: MenuAction[] = [
+    ...(!locked
+      ? ([
+          { label: 'Додати фото · або Ctrl+V', icon: 'image', onSelect: () => (setActions(null), pickImages((files) => editorRef.current?.insertImages(files))) },
+          { label: 'Нова сторінка', icon: 'plus', onSelect: () => (setActions(null), addPage()) },
+        ] as MenuAction[])
+      : []),
+    { label: note.pinned ? 'Відкріпити' : 'Закріпити вгорі', icon: 'pin', onSelect: () => (setActions(null), updateNote(note.id, { pinned: note.pinned ? 0 : 1 })) },
+    { label: locked ? 'Розблокувати редагування' : 'Лише читання', icon: locked ? 'lockOpen' : 'lock', onSelect: () => (setActions(null), toggleLock()) },
+    { label: 'Видалити нотатку', icon: 'trashLines', tone: 'danger', onSelect: removeThis },
+  ]
+
   return (
-    // На широкому екрані аркуш займає доступну висоту, довгий текст прокручується всередині
-    // Темний холст, як у Notion: без картки й рамок, текст прямо на фоні застосунку (кольори — у .notebook-canvas)
-    <section className="notebook-sheet notebook-canvas relative flex h-[720px] min-w-0 w-full flex-col px-0 pt-2 pb-4 text-ink" {...drop.dropProps}>
+    // Темний холст, як у Notion: без картки й рамок; текст — колонкою для читання посередині (кольори — у .notebook-canvas)
+    <section className="notebook-sheet notebook-canvas relative flex h-[720px] min-w-0 w-full flex-col text-ink" {...drop.dropProps}>
       <DropHint show={drop.over} />
       <button className="notebook-back" onClick={onBack}><Icon name="chevronLeft" size={18} /> Усі нотатки</button>
-      <div className="notebook-sheet-meta flex min-w-0 flex-wrap items-center gap-3">
-        {!!note.pinned && <PulseChip tone="growth">Закріплено</PulseChip>}
+      {/* Верхній рядок сторінки: коли змінено ліворуч, дії праворуч */}
+      <div className="notebook-sheet-meta flex min-w-0 items-center gap-2">
         {locked && <PulseChip tone="canvas">Лише читання</PulseChip>}
-        <span className="min-w-0 text-[14px] font-bold text-dim">
+        <span className="min-w-0 truncate text-[13px] font-bold text-muted">
           Змінено {age(note.updatedAt)}, {fmtTime(note.updatedAt)}
         </span>
-        {/* Дія з рядком — у верхньому правому куті аркуша; у заблокованій нотатці її немає */}
-        {!locked && (
-          <Button variant="canvas" size="sm" iconLeft="arrowUpRight" className="notebook-convert-action ml-auto shrink-0" onClick={() => editorRef.current?.convertCurrent()} data-tip="Ctrl + Enter">
-            Рядок у задачі
-          </Button>
-        )}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {!locked && (
+            <Button variant="canvas" size="sm" iconLeft="arrowUpRight" className="notebook-convert-action" onClick={() => editorRef.current?.convertCurrent()} data-tip="Ctrl + Enter">
+              Рядок у задачі
+            </Button>
+          )}
+          <span ref={moreRef} className="contents">
+            <RoundButton
+              icon="more"
+              tone="paper-line"
+              label="Дії з нотаткою"
+              onClick={() => {
+                const r = moreRef.current?.firstElementChild?.getBoundingClientRect()
+                if (r) setActions({ x: r.right - 288, y: r.bottom + 6 })
+              }}
+            />
+          </span>
+        </div>
       </div>
-      <div className="mt-5 flex items-center gap-3 max-[640px]:gap-2">
-      <EmojiPicker value={note.icon} disabled={locked} onChange={(icon) => updateNote(note.id, { icon })} />
-      <input
-        ref={titleRef}
-        value={title}
-        readOnly={locked}
-        onChange={(e) => {
-          const t = e.target.value.replace(/\n/g, ' ')
-          setTitle(t)
-          draft.current = { ...draft.current, title: t }
-          schedule()
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            editorRef.current?.focusStart()
-          }
-        }}
-        onBlur={flush}
-        placeholder="Заголовок"
-        className="min-w-0 flex-1 bg-transparent text-[44px] leading-[0.95] font-extrabold tracking-[-0.04em] text-ink outline-none placeholder:text-dim max-[640px]:text-[32px]"
-      />
-      </div>
-      <div className="mt-6 flex min-h-0 flex-1 flex-col">
-        <RichNote
-          key={page}
-          ref={editorRef}
-          html={html}
-          placeholder="Напишіть щось…"
-          onChange={onText}
+      <div className="notebook-doc mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col pt-6">
+        <div className="notebook-doc-icon shrink-0">
+          <EmojiPicker large value={note.icon} disabled={locked} onChange={(icon) => updateNote(note.id, { icon })} />
+        </div>
+        <textarea
+          rows={1}
+          ref={titleRef}
+          value={title}
           readOnly={locked}
-          imageOwner={note.id}
-          onLineToTask={async (t) => {
-            await captureToInbox(t, { sourceNoteId: note.id })
+          onChange={(e) => {
+            const t = e.target.value.replace(/\n/g, ' ')
+            setTitle(t)
+            draft.current = { ...draft.current, title: t }
+            schedule()
           }}
-        />
-      </div>
-      {/* Підвал: сторінки ліворуч, фото, замок, закріпити й видалити праворуч; тісно — переноситься */}
-      <div className="notebook-sheet-footer mt-4 flex flex-wrap items-center gap-2 pt-2">
-        <div className="notebook-page-controls flex min-w-0 max-w-full flex-[1_1_180px] justify-start">
-          <div
-            role="tablist"
-            aria-label="Сторінки"
-            className="flex min-w-0 max-w-full items-center gap-0.5 overflow-x-auto overscroll-x-contain rounded-[22px] bg-paper-line p-[3px]"
-            onKeyDown={(e) => {
-              const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
-              if (!dir) return
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
               e.preventDefault()
-              openPage((page + dir + pages.length) % pages.length)
-            }}
-          >
-            {pages.map((_, i) => (
-              <button
-                key={i}
-                role="tab"
-                aria-selected={i === page}
-                aria-label={`Сторінка ${i + 1}`}
-                tabIndex={i === page ? 0 : -1}
-                onClick={() => openPage(i)}
-                onContextMenu={(e) => {
-                  e.preventDefault()
-                  if (pages.length > 1 && !locked) setPageMenu({ x: e.clientX, y: e.clientY, index: i })
-                }}
-                className={cn(
-                  'size-9 shrink-0 rounded-full text-[14px] font-extrabold tabular-nums transition-[background-color,color,transform] duration-200 active:scale-[0.88]',
-                  i === page ? 'bg-canvas text-white' : 'text-paper-muted hover:text-ink',
-                )}
-              >
-                {i + 1}
-              </button>
-            ))}
+              editorRef.current?.focusStart()
+            }
+          }}
+          onBlur={flush}
+          placeholder="Без назви"
+          className="notebook-title mt-3 w-full shrink-0 resize-none overflow-hidden bg-transparent text-[clamp(30px,3.2vw,40px)] leading-[1.08] font-extrabold tracking-[-0.035em] text-ink outline-none [field-sizing:content] placeholder:text-dim"
+        />
+        {/* Сторінки — лише коли їх кілька; додати — у меню «…» */}
+        {pages.length > 1 && (
+          <div className="notebook-page-controls mt-4 flex min-w-0 max-w-full shrink-0 items-center gap-1.5">
+            <div
+              role="tablist"
+              aria-label="Сторінки"
+              className="flex min-w-0 max-w-full items-center gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain rounded-[20px] bg-paper-line p-1 [scrollbar-width:none]"
+              onKeyDown={(e) => {
+                const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+                if (!dir) return
+                e.preventDefault()
+                openPage((page + dir + pages.length) % pages.length)
+              }}
+            >
+              {pages.map((_, i) => (
+                <button
+                  key={i}
+                  role="tab"
+                  aria-selected={i === page}
+                  aria-label={`Сторінка ${i + 1}`}
+                  tabIndex={i === page ? 0 : -1}
+                  onClick={() => openPage(i)}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    if (!locked) setPageMenu({ x: e.clientX, y: e.clientY, index: i })
+                  }}
+                  className={cn(
+                    'h-8 min-w-8 shrink-0 rounded-full px-2.5 text-[13px] font-extrabold tabular-nums transition-colors duration-150',
+                    i === page ? 'bg-canvas text-white' : 'text-paper-muted hover:text-ink',
+                  )}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              {!locked && (
+                <button onClick={addPage} aria-label="Нова сторінка" className="grid size-8 shrink-0 place-items-center rounded-full text-paper-muted transition-colors hover:text-ink">
+                  <Icon name="plus" size={15} strokeWidth={2.6} />
+                </button>
+              )}
+            </div>
             {!locked && (
               <button
-                onClick={addPage}
-                aria-label="Нова сторінка"
-                data-tip="Нова сторінка"
-                className="grid size-9 shrink-0 place-items-center rounded-full text-paper-muted transition-[color,transform] hover:text-ink active:scale-[0.88]"
+                className="notebook-page-menu"
+                aria-label={`Дії сторінки ${page + 1}`}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  setPageMenu({ x: rect.left, y: rect.bottom, index: page })
+                }}
               >
-                <Icon name="plus" size={15} strokeWidth={2.6} />
+                <Icon name="more" size={20} />
               </button>
             )}
           </div>
-          {!locked && pages.length > 1 && (
-            <button className="notebook-page-menu" aria-label={`Дії сторінки ${page + 1}`} onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect()
-              setPageMenu({ x: rect.left, y: rect.bottom, index: page })
-            }}><Icon name="more" size={20} /></button>
-          )}
+        )}
+        <div className="mt-5 flex min-h-0 flex-1 flex-col">
+          <RichNote
+            key={page}
+            ref={editorRef}
+            html={html}
+            placeholder="Напишіть щось або натисніть «/» для блоків…"
+            onChange={onText}
+            readOnly={locked}
+            imageOwner={note.id}
+            onLineToTask={async (t) => {
+              await captureToInbox(t, { sourceNoteId: note.id })
+            }}
+          />
         </div>
-        {!locked && <AddImageButton onFiles={(files) => editorRef.current?.insertImages(files)} />}
-        {/* Замок показує стан: відкритий — можна писати, закритий — лише читання */}
-        <RoundButton icon={locked ? 'lock' : 'lockOpen'} tone="paper-line" label={locked ? 'Розблокувати редагування' : 'Заблокувати редагування'} onClick={toggleLock} />
-        <RoundButton
-          icon="pin"
-          tone="paper-line"
-          label={note.pinned ? 'Відкріпити' : 'Закріпити вгорі'}
-          onClick={() => updateNote(note.id, { pinned: note.pinned ? 0 : 1 })}
-        />
-        <RoundButton
-          icon="trash"
-          tone="paper-line"
-          label="Видалити нотатку"
-          onClick={async () => {
-            if (locked) return toast({ kind: 'info', icon: 'lock', title: 'Нотатку заблоковано', text: 'Відкрийте замок, щоб її видалити' })
-            flush()
-            await removeNote(note.id)
-            onDeleted()
-            toast({ kind: 'info', icon: 'trash', title: 'Нотатку видалено', action: { label: 'Скасувати', onClick: () => updateNote(note.id, { deleted: 0 }) } })
-          }}
-        />
       </div>
+      {actions && <ContextMenu x={actions.x} y={actions.y} label="Дії з нотаткою" autoFocus onClose={() => setActions(null)} items={actionItems} />}
       {pageMenu && (
         <ContextMenu
           x={pageMenu.x}

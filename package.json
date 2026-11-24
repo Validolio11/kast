@@ -1,7 +1,7 @@
 {
   "name": "kast",
   "productName": "Kast",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "description": "Kast — To-do з блокнотом, що не перевантажує",
   "author": "Ivan",
   "private": true,
@@ -16,6 +16,7 @@
     "build:android": "pnpm android:sync && node scripts/build-android.mjs",
     "build:android:release": "pnpm android:sync && node scripts/build-android.mjs --release",
     "test:mobile": "node --experimental-vm-modules --test scripts/test-mobile.mjs",
+    "audit:design": "node scripts/design-audit.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "build:win": "electron-vite build && electron-builder --win --publish never",
     "release": "electron-vite build && electron-builder --win --publish always"

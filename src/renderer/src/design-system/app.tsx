@@ -7,6 +7,7 @@ import { createContext, forwardRef, useContext, useEffect, useId, useLayoutEffec
 import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
 import { cn } from './utils'
+import { useSlidingPill } from './motion'
 
 /* ───────────── Знак ───────────── */
 /** Блоковий K на колі paper — знак Kast у тій самій формі, що й знак Karkas */
@@ -38,17 +39,20 @@ export function AppSidebar<T extends string>({ tabs, active, onSelect, onSetting
   onSettings: () => void
   settingsBadge?: ReactNode
 }) {
+  // Вибрана вкладка — пігулка, що перебігає між пунктами (Tab pill)
+  const { host, pill } = useSlidingPill<HTMLElement>('[aria-current="page"]', active, 'bg-paper')
   return (
     <aside className="app-sidebar" aria-label="Головне меню">
       <div className="app-sidebar-brand drag">
         <KastMark size={40} />
         <span className="sidebar-label text-[22px] font-extrabold tracking-tight">Kast</span>
       </div>
-      <nav className="app-sidebar-nav no-drag" aria-label="Розділи">
+      <nav ref={host} className="app-sidebar-nav no-drag relative isolate" aria-label="Розділи">
+        {pill}
         {tabs.map(t => {
           const selected = t.id === active
           return (
-            <button key={t.id} onClick={() => onSelect(t.id)} aria-label={t.count ? `${t.label}, ${t.count}` : t.label} aria-current={selected ? 'page' : undefined} title={`${t.label}${t.tip ? ` · ${t.tip}` : ''}`} className={cn('sidebar-nav-item', selected ? 'bg-paper text-ink font-extrabold' : 'text-grey hover:bg-tile hover:text-paper font-semibold')}>
+            <button key={t.id} onClick={() => onSelect(t.id)} aria-label={t.count ? `${t.label}, ${t.count}` : t.label} aria-current={selected ? 'page' : undefined} title={`${t.label}${t.tip ? ` · ${t.tip}` : ''}`} className={cn('sidebar-nav-item', selected ? 'text-ink font-extrabold' : 'text-grey hover:bg-tile hover:text-paper font-semibold')}>
               {t.icon && <Icon name={t.icon} size={21} className="shrink-0" />}
               <span className="sidebar-label min-w-0 flex-1 truncate text-left">{t.label}</span>
               {!!t.count && <span className={cn('sidebar-count text-[12px] font-bold tabular-nums', selected ? 'text-paper-muted' : 'text-muted')}>{t.count > 999 ? '999+' : t.count}</span>}
@@ -99,11 +103,13 @@ export function AppMobileHeader<T extends string>({
   actions?: ReactNode
   windowControls?: ReactNode
 }) {
+  const { host: navHost, pill: navPill } = useSlidingPill<HTMLElement>('[aria-current="page"]', active, 'bg-paper')
   return (
     <header className="mobile-app-header app-header drag grid min-h-[76px] min-w-0 w-full shrink-0 grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-4 py-4 select-none">
       <KastMark />
       <span className="mobile-current-title">{tabs.find((t) => t.id === active)?.label}</span>
-      <nav aria-label="Розділи" className="app-nav flex min-w-0 items-center justify-center gap-1">
+      <nav ref={navHost} aria-label="Розділи" className="app-nav relative isolate flex min-w-0 items-center justify-center gap-1">
+        {navPill}
         {tabs.map((t) => {
           const on = t.id === active
           return (
@@ -114,7 +120,7 @@ export function AppMobileHeader<T extends string>({
               data-tip={t.tip}
               className={cn(
                 'app-nav-item no-drag inline-flex h-11 shrink-0 items-center gap-2 rounded-full px-5 text-[15px] whitespace-nowrap transition-colors duration-150 max-[900px]:px-4',
-                on ? 'bg-paper font-extrabold text-ink' : 'font-semibold text-grey hover:bg-tile hover:text-paper',
+                on ? 'font-extrabold text-ink' : 'font-semibold text-grey hover:bg-tile hover:text-paper',
               )}
             >
               {t.icon && <Icon name={t.icon} size={21} className="mobile-nav-icon" />}
@@ -271,7 +277,7 @@ export const CaptureField = forwardRef<HTMLInputElement, CaptureFieldProps>(func
       <input
         ref={ref}
         value={value}
-        autoFocus={autoFocus && !matchMedia('(max-width: 767px)').matches}
+        autoFocus={autoFocus && !matchMedia('(max-width: 759px)').matches}
         className="h-full min-w-0 flex-1 bg-transparent text-[16px] font-semibold text-paper caret-growth outline-none placeholder:text-muted"
         {...rest}
       />
@@ -290,6 +296,7 @@ export const CaptureField = forwardRef<HTMLInputElement, CaptureFieldProps>(func
             onClick={action.onClick}
             aria-label={action.label}
             data-tip={action.label}
+            data-tip-align="end"
             className="grid size-11 shrink-0 place-items-center rounded-full bg-paper text-ink transition active:scale-90"
           >
             <Icon name={action.icon} size={18} />
@@ -475,12 +482,12 @@ export function PulseRow({
           {actions}
         </div>
       )}
-      {(meta || age) && (
+      {(meta || (age && age.value > 0)) && (
         <div
           className={cn('pulse-row-meta flex shrink-0 items-center gap-2 text-[13px] font-semibold text-muted transition-opacity duration-200', finishing && 'opacity-0')}
           onClick={(e) => e.stopPropagation()}
         >
-          {age && <AgeScale {...age} />}
+          {age && age.value > 0 && <AgeScale {...age} />}
           {meta}
         </div>
       )}
@@ -660,11 +667,19 @@ export function SegTabs<T extends string>({
   /** Вужчі вкладки, щоб 4 варіанти вмістились у колонку 400px */
   compact?: boolean
 }) {
-  return (
+  // Вибране — пігулка, що перебігає й розтягується в бік руху (Segmented control)
+  const { host, pill } = useSlidingPill<HTMLDivElement>('[aria-checked="true"]', value, 'bg-paper')
+  const group = (
     <div
+      ref={host}
       role="radiogroup"
       aria-label={label}
-      className={cn('seg-tabs flex w-fit max-w-full flex-wrap gap-1 rounded-[26px] p-1', surface === 'tile' ? 'bg-tile' : 'bg-canvas')}
+      className={cn(
+        'seg-tabs relative isolate gap-1 rounded-[26px] p-1',
+        // compact — рівна сітка: 4 в ряд, а коли тісно — 2×2, без «обрубка» на другому рядку
+        compact ? 'seg-tabs-compact grid w-full' : 'flex w-fit max-w-full flex-wrap',
+        surface === 'tile' ? 'bg-tile' : 'bg-canvas',
+      )}
       onKeyDown={(e) => {
         const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
         if (!dir) return
@@ -673,6 +688,7 @@ export function SegTabs<T extends string>({
         onChange(options[(i + dir + options.length) % options.length].value)
       }}
     >
+      {pill}
       {options.map((o) => {
         const on = o.value === value
         return (
@@ -683,9 +699,9 @@ export function SegTabs<T extends string>({
             tabIndex={on ? 0 : -1}
             onClick={() => onChange(o.value)}
             className={cn(
-              'inline-flex h-10 items-center gap-1.5 rounded-control text-[14px] transition-colors duration-150',
-              compact ? 'px-3.5' : 'px-[18px]',
-              on ? 'bg-paper font-extrabold text-ink' : 'font-bold text-soft hover:text-white',
+              'inline-flex h-10 items-center gap-1.5 rounded-control text-[14px] whitespace-nowrap transition-colors duration-150',
+              compact ? 'justify-center px-2' : 'px-[18px]',
+              on ? 'font-extrabold text-ink' : 'font-bold text-soft hover:text-white',
             )}
           >
             {o.icon && <Icon name={o.icon} size={15} />}
@@ -695,6 +711,7 @@ export function SegTabs<T extends string>({
       })}
     </div>
   )
+  return compact ? <div className="seg-tabs-host">{group}</div> : group
 }
 
 /** Перемикач 56×32: увімкнено — growth */
@@ -965,7 +982,7 @@ export function ContextMenu({
     }
     const close = () => onClose()
     // Відкриття клавіатури змінює розмір WebView; меню з пошуком шрифту має лишатись відкритим.
-    const resize = () => { if (!matchMedia('(max-width: 767px)').matches) onClose() }
+    const resize = () => { if (!matchMedia('(max-width: 759px)').matches) onClose() }
     const back = (e: Event) => {
       if (e.defaultPrevented) return
       e.preventDefault()

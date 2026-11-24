@@ -13,7 +13,7 @@ function useDialogBehavior(ref: React.RefObject<HTMLElement | null>, active: boo
     const overflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const el = ref.current
-    ;(matchMedia('(max-width: 767px)').matches ? el : el?.querySelector<HTMLElement>('[data-autofocus]') ?? el?.querySelector<HTMLElement>(FOCUSABLE) ?? el)?.focus()
+    ;(matchMedia('(max-width: 759px)').matches ? el : el?.querySelector<HTMLElement>('[data-autofocus]') ?? el?.querySelector<HTMLElement>(FOCUSABLE) ?? el)?.focus()
     const trap = (e: KeyboardEvent) => {
       if (e.key !== 'Tab' || !el) return
       const nodes = Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE))
@@ -61,6 +61,41 @@ interface WindowProps {
   description?: string
   children?: ReactNode
   footer?: ReactNode
+}
+
+/* ───────────── Palette ───────────── */
+/**
+ * Вікно швидкого переходу (Ctrl+P): без шапки, ближче до верху екрана.
+ * Радіус 32 і відступ 8 — елементи всередині беруть 24, щоб кути йшли концентрично.
+ */
+export function Palette({ open, onClose, label, children }: { open: boolean; onClose: () => void; label: string; children: ReactNode }) {
+  const { mounted, state } = usePresence(open, 190)
+  const ref = useRef<HTMLDivElement>(null)
+  useEscape(onClose, open)
+  useDialogBehavior(ref, open)
+  useAndroidBack(ref, open, onClose)
+  if (!mounted) return null
+  return createPortal(
+    <div className="modal-root fixed inset-0 z-[100] flex justify-center p-4 pt-[12vh]">
+      <div onClick={onClose} aria-hidden className={cn('absolute inset-0 bg-canvas/80 backdrop-blur-sm', state === 'open' ? 'animate-fade-in' : 'animate-fade-out')} />
+      <div aria-hidden className="drag absolute inset-x-0 top-0 h-[76px]" />
+      <div
+        ref={ref}
+        role="dialog"
+        data-dialog-open={open ? '' : undefined}
+        aria-modal="true"
+        aria-label={label}
+        tabIndex={-1}
+        className={cn(
+          'palette-panel no-drag relative flex max-h-[min(70vh,560px)] w-full max-w-[600px] flex-col self-start overflow-hidden rounded-[32px] bg-tile p-2 shadow-dialog outline-none',
+          state === 'open' ? 'animate-modal-in' : 'animate-modal-out',
+        )}
+      >
+        {children}
+      </div>
+    </div>,
+    document.body,
+  )
 }
 
 /* ───────────── Modal ───────────── */

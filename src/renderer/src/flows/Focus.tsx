@@ -59,9 +59,8 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
         <div className="mb-7 flex animate-enter items-start gap-5">
           <RoundButton icon="chevronLeft" size={56} label="Назад · Esc" onClick={onClose} />
           <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-            {/* Підпис над назвою: одразу ясно, що це задача і де вона лежить */}
+            {/* Де лежить задача; слово «Задача» вже в шапці вікна */}
             <div className="flex items-center gap-3">
-              <span className="text-[15px] font-extrabold text-grey">Задача</span>
               <PulseChip tone={isToday ? 'growth' : 'steel'}>{STATUS_LABEL[task.status]}</PulseChip>
             </div>
             <Field
@@ -86,6 +85,7 @@ export function Focus({ id, onClose }: { id: string; onClose: () => void }) {
                     </Group>
                     <Group label="Вага">
                       <SegTabs
+                        compact
                         label="Вага задачі"
                         surface="canvas"
                         value={task.kind}
@@ -180,7 +180,7 @@ function TaskNotes({ task }: { task: Task }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   return (
-    <section className="focus-notes relative flex min-h-[320px] flex-col rounded-panel bg-paper p-7 text-ink" {...drop.dropProps}>
+    <section className="focus-notes relative flex min-h-[320px] flex-col rounded-panel bg-paper p-7 text-ink transition-shadow duration-150 focus-within:shadow-[inset_0_0_0_2px_var(--color-growth)]" {...drop.dropProps}>
       <DropHint show={drop.over} />
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">Нотатки</h2>
@@ -581,7 +581,7 @@ function Timer({ task }: { task: Task }) {
               key={m}
               onClick={() => pick(m)}
               aria-pressed={m === minutes}
-              className={cn('h-8 rounded-full px-3 text-[13px] font-extrabold transition-colors', m === minutes ? 'bg-paper text-ink' : 'text-white/80 hover:text-white')}
+              className={cn('h-8 rounded-full px-3 text-[13px] font-extrabold whitespace-nowrap transition-colors', m === minutes ? 'bg-paper text-ink' : 'text-white/80 hover:text-white')}
             >
               {m} хв
             </button>

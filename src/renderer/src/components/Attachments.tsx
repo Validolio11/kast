@@ -109,16 +109,18 @@ export function Viewer({
 }
 
 /** Кнопка «Додати фото»: відкриває вибір файлів (кілька одразу) */
+/** Системний вибір фото (кілька одразу) */
+export function pickImages(onFiles: (files: File[]) => void) {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/*'
+  input.multiple = true
+  input.onchange = () => input.files && onFiles(Array.from(input.files))
+  input.click()
+}
+
 export function AddImageButton({ onFiles, tone = 'paper-line' }: { onFiles: (files: File[]) => void; tone?: 'tile' | 'paper' | 'paper-line' }) {
-  const pick = () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/*'
-    input.multiple = true
-    input.onchange = () => input.files && onFiles(Array.from(input.files))
-    input.click()
-  }
-  return <RoundButton icon="image" tone={tone} label="Додати фото · або Ctrl+V скріншот" onClick={pick} />
+  return <RoundButton icon="image" tone={tone} label="Додати фото · або Ctrl+V скріншот" onClick={() => pickImages(onFiles)} />
 }
 
 

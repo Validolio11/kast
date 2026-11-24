@@ -82,14 +82,21 @@ export function Today({
                 Зараз{now.when !== 'any' ? ` · ${WHEN_OPTIONS.find((o) => o.value === now.when)?.label}` : ''}
               </PulseChip>
               <div className="flex items-end gap-4">
-                <div className="min-w-0 flex-1">
-                  <h2 className="now-title text-[44px] leading-[0.95] font-extrabold tracking-[-0.04em] break-words">{now.title}</h2>
+                <div className="now-text min-w-0 flex-1">
+                  <h2
+                    className="now-title leading-[0.95] font-extrabold tracking-[-0.04em]"
+                    style={{ '--now-longest': Math.max(6, ...now.title.split(/\s+/).map((w) => w.length)), '--now-size': now.title.length > 48 ? '34px' : '44px' } as React.CSSProperties}
+                  >
+                    {now.title}
+                  </h2>
                   {now.firstStep && <p className="mt-3 text-[15px] font-semibold text-paper-muted">{now.stepsDone ? 'Наступний крок' : 'Перший крок'}: {now.firstStep}</p>}
                 </div>
                 <button
                   onClick={() => onOpen(now.id)}
                   aria-label={`Почати: ${now.title}`}
                   data-tip="Почати"
+                  data-tip-align="end"
+                  data-tip-side="top"
                   className="grid size-14 shrink-0 place-items-center rounded-full bg-canvas text-white transition hover:-translate-y-0.5 active:scale-[0.97]"
                 >
                   <Icon name="play" size={20} />

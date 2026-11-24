@@ -56,7 +56,7 @@ const saveRecent = (emoji: string) => {
 }
 
 /** Іконка нотатки: кнопка біля заголовка й сітка емодзі з пошуком (українською чи англійською) */
-export function EmojiPicker({ value, onChange, disabled }: { value?: string; onChange: (emoji?: string) => void; disabled?: boolean }) {
+export function EmojiPicker({ value, onChange, disabled, large }: { value?: string; onChange: (emoji?: string) => void; disabled?: boolean; /** Велика іконка над назвою сторінки; без іконки — тиха кнопка «Додати іконку» */ large?: boolean }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const ref = useRef<HTMLDivElement>(null)
@@ -91,12 +91,25 @@ export function EmojiPicker({ value, onChange, disabled }: { value?: string; onC
         aria-label={value ? 'Змінити іконку' : 'Додати іконку'}
         data-tip={value ? undefined : 'Іконка нотатки'}
         className={cn(
-          'grid size-[52px] place-items-center rounded-full transition-colors disabled:cursor-default max-[640px]:size-11',
-          value ? 'hover:bg-paper-line disabled:hover:bg-transparent' : 'text-dim hover:bg-paper-line hover:text-ink',
+          'transition-colors disabled:cursor-default',
+          large
+            ? value
+              ? 'grid size-[72px] place-items-center rounded-[24px] hover:bg-paper-line disabled:hover:bg-transparent max-[640px]:size-14'
+              : 'inline-flex h-8 items-center gap-1.5 rounded-full pr-3 pl-2 text-[13px] font-bold text-paper-muted hover:bg-paper-line hover:text-ink'
+            : cn('grid size-[52px] place-items-center rounded-full max-[640px]:size-11', value ? 'hover:bg-paper-line disabled:hover:bg-transparent' : 'text-dim hover:bg-paper-line hover:text-ink'),
           open && 'bg-paper-line',
         )}
       >
-        {value ? <span className="note-emoji text-[34px] max-[640px]:text-[28px]">{value}</span> : <Icon name="smilePlus" size={24} />}
+        {value ? (
+          <span className={cn('note-emoji', large ? 'text-[52px] leading-none max-[640px]:text-[40px]' : 'text-[34px] max-[640px]:text-[28px]')}>{value}</span>
+        ) : large ? (
+          <>
+            <Icon name="smilePlus" size={16} />
+            Додати іконку
+          </>
+        ) : (
+          <Icon name="smilePlus" size={24} />
+        )}
       </button>
       {open && (
         <div
