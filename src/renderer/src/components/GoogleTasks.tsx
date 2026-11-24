@@ -99,6 +99,7 @@ function GTaskRow({ task, today, showList }: { task: GTask; today: string; showL
         sub={task.notes?.split('\n')[0]}
         finishing={finishing}
         onMenu={finishing ? undefined : (x, y) => setMenu({ x, y })}
+        onDelete={finishing ? undefined : del}
         meta={
           meta ? (
             <span className="inline-flex items-center gap-1 text-[12px] font-bold text-muted">
@@ -118,7 +119,7 @@ function GTaskRow({ task, today, showList }: { task: GTask; today: string; showL
           onClose={() => setMenu(null)}
           items={[
             { label: 'Перенести в Kast', icon: 'arrowUpRight', onSelect: () => (setMenu(null), void moveToKast()) },
-            { label: 'Видалити з Google', icon: 'trashLines', tone: 'danger', onSelect: del },
+            { label: 'Видалити з Google', icon: 'trashLines', tone: 'danger', shortcut: 'Delete', onSelect: del },
           ]}
         />
       )}

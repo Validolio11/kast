@@ -132,9 +132,9 @@ function NoteRow({ note, selected, onOpen }: { note: Note; selected: boolean; on
   const enter = useRowEnter()
   const toast = useToast()
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  // Замок береже текст від правок, а не від видалення: помилку виправляє «Скасувати» в підказці
   const remove = async () => {
     setMenu(null)
-    if (note.locked) return toast({ kind: 'info', icon: 'lock', title: 'Нотатку заблоковано', text: 'Відкрийте замок, щоб її видалити' })
     await removeNote(note.id)
     toast({ kind: 'info', icon: 'trash', title: 'Нотатку видалено', action: { label: 'Скасувати', onClick: () => updateNote(note.id, { deleted: 0 }) } })
   }
@@ -142,6 +142,11 @@ function NoteRow({ note, selected, onOpen }: { note: Note; selected: boolean; on
     <>
       <button
         onClick={onOpen}
+        onKeyDown={(e) => {
+          if (e.key !== 'Delete') return
+          e.preventDefault()
+          remove()
+        }}
         onContextMenu={(e) => {
           e.preventDefault()
           setMenu({ x: e.clientX, y: e.clientY })
@@ -167,9 +172,9 @@ function NoteRow({ note, selected, onOpen }: { note: Note; selected: boolean; on
           autoFocus
           onClose={() => setMenu(null)}
           items={[
-            { label: 'Відкрити', icon: 'arrowUpRight', onSelect: () => (setMenu(null), onOpen()) },
+            { label: 'Відкрити', icon: 'arrowUpRight', shortcut: 'Enter', onSelect: () => (setMenu(null), onOpen()) },
             { label: note.pinned ? 'Відкріпити' : 'Закріпити вгорі', icon: 'pin', onSelect: () => (setMenu(null), updateNote(note.id, { pinned: note.pinned ? 0 : 1 })) },
-            { label: 'Видалити', icon: 'trashLines', tone: 'danger', onSelect: remove },
+            { label: 'Видалити', icon: 'trashLines', tone: 'danger', shortcut: 'Delete', onSelect: remove },
           ]}
         />
       )}
@@ -362,22 +367,38 @@ function Sheet({ note, titleRef, onDeleted, onBack }: { note: Note; titleRef: Re
 
   const removeThis = async () => {
     setActions(null)
-    if (locked) return toast({ kind: 'info', icon: 'lock', title: 'Нотатку заблоковано', text: 'Відкрийте замок, щоб її видалити' })
     flush()
     await removeNote(note.id)
     onDeleted()
     toast({ kind: 'info', icon: 'trash', title: 'Нотатку видалено', action: { label: 'Скасувати', onClick: () => updateNote(note.id, { deleted: 0 }) } })
   }
+  // Гарячі клавіші нотатки — ті самі, що підписані в меню «…»
+  const hotkeys = useRef({ addPage, toggleLock, removeThis, locked })
+  hotkeys.current = { addPage, toggleLock, removeThis, locked }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || !e.shiftKey || e.altKey || e.defaultPrevented || document.querySelector('[data-dialog-open]')) return
+      const h = hotkeys.current
+      if (e.code === 'KeyN' && !h.locked) h.addPage()
+      else if (e.code === 'KeyL') h.toggleLock()
+      else if (e.code === 'KeyD') h.removeThis()
+      else return
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const actionItems: MenuAction[] = [
     ...(!locked
       ? ([
-          { label: 'Додати фото · або Ctrl+V', icon: 'image', onSelect: () => (setActions(null), pickImages((files) => editorRef.current?.insertImages(files))) },
-          { label: 'Нова сторінка', icon: 'plus', onSelect: () => (setActions(null), addPage()) },
+          { label: 'Додати фото', icon: 'image', shortcut: 'Ctrl+V', onSelect: () => (setActions(null), pickImages((files) => editorRef.current?.insertImages(files))) },
+          { label: 'Нова сторінка', icon: 'plus', shortcut: 'Ctrl+Shift+N', onSelect: () => (setActions(null), addPage()) },
         ] as MenuAction[])
       : []),
     { label: note.pinned ? 'Відкріпити' : 'Закріпити вгорі', icon: 'pin', onSelect: () => (setActions(null), updateNote(note.id, { pinned: note.pinned ? 0 : 1 })) },
-    { label: locked ? 'Розблокувати редагування' : 'Лише читання', icon: locked ? 'lockOpen' : 'lock', onSelect: () => (setActions(null), toggleLock()) },
-    { label: 'Видалити нотатку', icon: 'trashLines', tone: 'danger', onSelect: removeThis },
+    { label: locked ? 'Розблокувати редагування' : 'Лише читання', icon: locked ? 'lockOpen' : 'lock', shortcut: 'Ctrl+Shift+L', onSelect: () => (setActions(null), toggleLock()) },
+    { label: 'Видалити нотатку', icon: 'trashLines', tone: 'danger', shortcut: 'Ctrl+Shift+D', onSelect: removeThis },
   ]
 
   return (

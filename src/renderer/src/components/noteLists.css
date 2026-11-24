@@ -41,6 +41,11 @@
   user-select: none;
 }
 
+/* Пункт починається з кнопки копіювання (40px + поля по 2px): номер по центру кнопки, а не вгорі рядка */
+.note-editor > div[data-list='ol']:has(> .note-chip:first-child)::before {
+  line-height: 44px;
+}
+
 /* Номер підпункту стоїть під текстом пункту рівнем вище, як у Word */
 .note-editor > div[data-list='ol'][data-level='2']::before {
   content: counter(note-list) '.' counter(note-l2) '.';

@@ -174,11 +174,11 @@ function Shell() {
       if (n >= 1 && n <= 4) {
         e.preventDefault()
         go(TABS[n - 1])
-      } else if (e.key.toLowerCase() === 'n' || e.code === 'KeyN') {
+      } else if (!e.shiftKey && (e.key.toLowerCase() === 'n' || e.code === 'KeyN')) {
         e.preventDefault()
             setFocusId(null)
         requestAnimationFrame(() => captureRef.current?.focus())
-      } else if (e.key.toLowerCase() === 'p' || e.code === 'KeyP') {
+      } else if (!e.shiftKey && (e.key.toLowerCase() === 'p' || e.code === 'KeyP')) {
         // Швидкий пошук нотаток з будь-якої вкладки
         e.preventDefault()
         setSwitcher(true)

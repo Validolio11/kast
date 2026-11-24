@@ -495,6 +495,16 @@ export const RichNote = forwardRef<RichNoteHandle, {
       emit()
       return
     }
+    // Ctrl+Shift+7 — нумерація, Ctrl+Shift+K — кнопка копіювання з виділеного (те саме, що в меню)
+    if (e.ctrlKey && e.shiftKey && !e.altKey && (e.code === 'Digit7' || e.code === 'KeyK')) {
+      e.preventDefault()
+      const sel = getSelection()
+      const range = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null
+      const picked = range && !range.collapsed ? range : null
+      if (e.code === 'Digit7') numberSel(picked)
+      else if (picked?.toString().trim()) chipFrom(picked)
+      return
+    }
     if (e.key !== 'Enter' || e.shiftKey) return
     const block = currentBlock()
     if (!block) return
@@ -1035,10 +1045,11 @@ export const RichNote = forwardRef<RichNoteHandle, {
   }
 
   const copyItem: MenuAction = menu?.chip
-    ? { label: menu.chip.classList.contains('note-link') ? 'Копіювати посилання' : 'Копіювати', icon: 'copy', onSelect: () => (copy(chipText(menu.chip!)), close()) }
+    ? { label: menu.chip.classList.contains('note-link') ? 'Копіювати посилання' : 'Копіювати', icon: 'copy', shortcut: 'Ctrl+C', onSelect: () => (copy(chipText(menu.chip!)), close()) }
     : {
         label: 'Копіювати',
         icon: 'copy',
+        shortcut: 'Ctrl+C',
         disabled: !hasText,
         onSelect: () => (copy(allRanges().map((x) => plainText(el(), x)).join('\n')), clearExtra(), close()),
       }
@@ -1105,9 +1116,35 @@ export const RichNote = forwardRef<RichNoteHandle, {
       done('', before, true)
     }
     return [
-      ...(blocks.some((b) => levelOf(b) < maxLevel(b)) ? [{ label: 'Підпункт · Tab', icon: 'indent', onSelect: act(1) } as MenuAction] : []),
-      ...(blocks.some((b) => levelOf(b) > 1) ? [{ label: 'Рівень вище · Shift+Tab', icon: 'outdent', onSelect: act(-1) } as MenuAction] : []),
+      ...(blocks.some((b) => levelOf(b) < maxLevel(b)) ? [{ label: 'Підпункт', icon: 'indent', shortcut: 'Tab', onSelect: act(1) } as MenuAction] : []),
+      ...(blocks.some((b) => levelOf(b) > 1) ? [{ label: 'Рівень вище', icon: 'outdent', shortcut: 'Shift+Tab', onSelect: act(-1) } as MenuAction] : []),
     ]
+  }
+
+  /** Нумерація для виділення або рядка під курсором (меню й Ctrl+Shift+7) */
+  const numberSel = (range: Range | null) => {
+    const blocks = range ? blocksIn(el(), range) : [currentBlock()].filter((b): b is HTMLElement => !!b)
+    if (!blocks.length) return close()
+    const before = snapshot()
+    const on = toggleNumbering(blocks)
+    close()
+    done(on ? 'Нумерацію додано' : 'Нумерацію прибрано', before, true)
+  }
+  /** Кнопка копіювання з виділеного тексту (меню й Ctrl+Shift+K) */
+  const chipFrom = (range: Range) => {
+    const text = range.toString().replace(/\s+/g, ' ').trim()
+    const before = snapshot()
+    range.deleteContents()
+    const chip = makeChip(text)
+    range.insertNode(chip)
+    const space = document.createTextNode(' ')
+    chip.after(space)
+    const r = document.createRange()
+    r.setStartAfter(space)
+    r.collapse(true)
+    select(r)
+    close()
+    done('Кнопку додано', before, true)
   }
 
   const items: MenuAction[] = isVideo
@@ -1159,19 +1196,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
         },
       ]
     : [
-        {
-          label: 'Нумерація',
-          icon: 'listOrdered',
-          onSelect: () => {
-            const range = menu?.range ?? null
-            const blocks = range ? blocksIn(el(), range) : [currentBlock()].filter((b): b is HTMLElement => !!b)
-            if (!blocks.length) return close()
-            const before = snapshot()
-            const on = toggleNumbering(blocks)
-            close()
-            done(on ? 'Нумерацію додано' : 'Нумерацію прибрано', before, true)
-          },
-        },
+        { label: 'Нумерація', icon: 'listOrdered', shortcut: 'Ctrl+Shift+7', onSelect: () => numberSel(menu?.range ?? null) },
         ...levelItems(),
         {
           label: 'Пензлик формату',
@@ -1187,6 +1212,7 @@ export const RichNote = forwardRef<RichNoteHandle, {
         {
           label: 'Вставити',
           icon: 'clipboardPaste',
+          shortcut: 'Ctrl+V',
           onSelect: async () => {
             const range = menu?.range
             close()
@@ -1207,28 +1233,15 @@ export const RichNote = forwardRef<RichNoteHandle, {
           label: 'Кнопка копіювання',
           icon: 'copyPlus',
           tone: 'growth',
+          shortcut: 'Ctrl+Shift+K',
           disabled: !hasText,
-          onSelect: () => {
-            const range = menu!.range!
-            const text = range.toString().replace(/\s+/g, ' ').trim()
-            const before = snapshot()
-            range.deleteContents()
-            const chip = makeChip(text)
-            range.insertNode(chip)
-            const space = document.createTextNode('\u00a0')
-            chip.after(space)
-            const r = document.createRange()
-            r.setStartAfter(space)
-            r.collapse(true)
-            select(r)
-            close()
-            done('Кнопку додано', before, true)
-          },
+          onSelect: () => chipFrom(menu!.range!),
         },
         {
           label: 'Видалити',
           icon: 'trashLines',
           tone: 'danger',
+          shortcut: 'Delete',
           disabled: !hasText,
           onSelect: () => {
             const before = snapshot()

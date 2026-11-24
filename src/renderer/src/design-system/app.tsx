@@ -416,6 +416,7 @@ export function PulseRow({
   age,
   finishing,
   onMenu,
+  onDelete,
 }: {
   leading?: ReactNode
   title: ReactNode
@@ -425,6 +426,8 @@ export function PulseRow({
   onClick?: () => void
   /** Контекстне меню: права кнопка, клавіша меню або Shift+F10 (тоді — під рядком) */
   onMenu?: (x: number, y: number) => void
+  /** Delete на рядку у фокусі — видалити (з «Скасувати» в підказці) */
+  onDelete?: () => void
   done?: boolean
   selected?: boolean
   muted?: boolean
@@ -454,6 +457,10 @@ export function PulseRow({
       onKeyDown={(e) => {
         if (e.target !== e.currentTarget) return
         if (onClick && e.key === 'Enter') onClick()
+        if (onDelete && e.key === 'Delete') {
+          e.preventDefault()
+          onDelete()
+        }
         if (onMenu && (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) {
           e.preventDefault()
           const r = e.currentTarget.getBoundingClientRect()
@@ -928,6 +935,8 @@ export interface MenuAction {
   /** growth — особлива дія; danger — видалення (завжди останнім) */
   tone?: 'default' | 'growth' | 'danger'
   disabled?: boolean
+  /** Гаряча клавіша дії — тихо праворуч, щоб наступного разу обійтися без меню */
+  shortcut?: string
 }
 
 /**
@@ -1029,7 +1038,7 @@ export function ContextMenu({
         if ((e.target as HTMLElement).closest('button')) e.preventDefault()
       }}
       onContextMenu={(e) => e.preventDefault()}
-      className="context-menu no-drag fixed z-[130] flex w-[288px] origin-top-left animate-menu-in flex-col gap-0.5 rounded-[26px] bg-canvas p-1.5 text-white shadow-menu"
+      className="context-menu no-drag fixed z-[130] flex w-max min-w-[288px] max-w-[min(380px,calc(100vw-16px))] origin-top-left animate-menu-in flex-col gap-0.5 rounded-[26px] bg-canvas p-1.5 text-white shadow-menu"
       style={pos}
     >
       {header && <div className="mb-1 border-b border-tile px-1 pt-1 pb-2.5">{header}</div>}
@@ -1060,7 +1069,8 @@ export function ContextMenu({
           >
             <Icon name={it.icon} size={20} />
           </span>
-          {it.label}
+          <span className="min-w-0 flex-1">{it.label}</span>
+          {it.shortcut && <kbd className="ml-3 shrink-0 font-sans text-[12px] font-bold whitespace-nowrap text-muted">{it.shortcut}</kbd>}
         </button>
       ))}
     </div>,

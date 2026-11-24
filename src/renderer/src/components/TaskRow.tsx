@@ -84,6 +84,7 @@ export function TaskRow({
         muted={muted}
         onClick={() => onOpen(task.id)}
         onMenu={finishing ? undefined : (x, y) => setMenu({ x, y })}
+        onDelete={finishing ? undefined : del}
         actions={actions}
         age={ageOf(task)}
         meta={
@@ -110,8 +111,8 @@ export function TaskRow({
           autoFocus
           onClose={() => setMenu(null)}
           items={[
-            { label: 'Відкрити', icon: 'arrowUpRight', onSelect: () => (setMenu(null), onOpen(task.id)) },
-            { label: 'Видалити', icon: 'trashLines', tone: 'danger', onSelect: del },
+            { label: 'Відкрити', icon: 'arrowUpRight', shortcut: 'Enter', onSelect: () => (setMenu(null), onOpen(task.id)) },
+            { label: 'Видалити', icon: 'trashLines', tone: 'danger', shortcut: 'Delete', onSelect: del },
           ]}
         />
       )}
