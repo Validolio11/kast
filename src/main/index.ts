@@ -28,7 +28,12 @@ let quitting = false
 let updateReady: string | null = null
 
 // Налагодження: KAST_CDP=9333 відкриває порт DevTools (знімки вікна, автотести)
-if (process.env.KAST_CDP) app.commandLine.appendSwitch('remote-debugging-port', process.env.KAST_CDP)
+if (process.env.KAST_CDP) {
+  app.commandLine.appendSwitch('remote-debugging-port', process.env.KAST_CDP)
+  // Автотести малюють вікно, навіть коли воно під іншими вікнами чи згорнуте
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+  app.commandLine.appendSwitch('disable-renderer-backgrounding')
+}
 if (!app.requestSingleInstanceLock()) app.quit()
 // Деякі сайти й плеєри відсіюють «Electron» в User-Agent як «непідтримуваний браузер» — показуємося звичайним Chrome
 app.userAgentFallback = app.userAgentFallback.replace(/\s(Electron|kast)\/\S+/gi, '')

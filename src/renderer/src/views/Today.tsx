@@ -109,7 +109,7 @@ export function Today({
             <InfoRow
               icon="check"
               title="Зроблено сьогодні"
-              text={done.length ? `${done.length} з ${total}` : 'ще попереду'}
+              text={done.length ? `${done.length}\u00a0з\u00a0${total}` : 'ще попереду'}
               progress={(done.length / total) * 100}
             >
               <span className="text-[15px] font-extrabold text-white tabular-nums">{Math.round((done.length / total) * 100)}%</span>

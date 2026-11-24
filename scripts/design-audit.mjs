@@ -9,6 +9,7 @@ const SIZES = [
   [760, 520],
   [1280, 800],
   [1920, 1080],
+  [2560, 1440],
 ]
 mkdirSync(OUT, { recursive: true })
 

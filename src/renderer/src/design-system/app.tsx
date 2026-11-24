@@ -816,7 +816,8 @@ export function InfoRow({
         />
       )}
       <Icon name={icon} size={18} className={cn('relative shrink-0', tone === 'accent' ? 'text-growth' : filled ? 'text-white/75' : 'text-muted')} />
-      <p className={cn('relative min-w-0 flex-1 truncate text-[15px] font-semibold', filled ? 'text-white/75' : 'text-muted')}>
+      {/* До двох рядків замість обрізання: у вузькій колонці підказка лишається прочитною */}
+      <p className={cn('relative min-w-0 flex-1 line-clamp-2 text-[15px] leading-[1.25] font-semibold', filled ? 'text-white/75' : 'text-muted')}>
         <span className={tone === 'accent' ? 'text-growth' : 'text-white'}>{title}</span>
         {text && <span> · {text}</span>}
       </p>

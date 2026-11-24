@@ -689,15 +689,25 @@
   .app-sidebar-footer { flex-shrink: 0; padding: 12px; border-top: 1px solid var(--color-hairline); }
   .notebook-back, .notebook-page-menu { display: none; }
   .notebook-list { flex: 1; }
-  /* На великому моніторі рядки не тягнуться на весь екран: назва й мітка «коли» лишаються поруч */
   .page-grid { grid-template-columns: minmax(0, 1fr); gap: var(--kast-layout-gap); }
-  .app-page-content > * { max-width: 1440px; }
+  /* Фокус — окрема сторінка задачі, не вкладка: лишається не ширшою за 1440px */
+  .focus-view .app-page-content > * { max-width: 1440px; }
   .app-page-content-fill { height: 100%; min-height: 400px; padding-bottom: 24px; }
   .page-grid-fill { min-height: 0; flex: 1; grid-template-rows: minmax(0, 1fr); }
   .page-grid-fill > .page-grid-side, .page-grid-fill > .page-grid-main { min-height: 0; height: 100%; }
   .page-grid-fill .notebook-sheet { min-height: 0; height: 100%; }
   @container workspace (min-width: 960px) {
-    .page-grid { grid-template-columns: minmax(320px, min(32cqw, 400px)) minmax(0, 1fr); }
+    /*
+     * Один скелет усіх вкладок, як у Notion: ліва колонка однакова всюди й відділена тонкою межею,
+     * праворуч — робоча частина на всю ширину, вміст посередині (списки до 960px, текст нотатки до 760px).
+     */
+    .app-page .page-grid { grid-template-columns: minmax(340px, min(26cqw, 380px)) minmax(0, 1fr); }
+    .app-page .page-grid-side { align-self: stretch; padding-right: var(--kast-layout-gap); border-right: 1px solid var(--color-hairline); }
+    /* Межа колонки — на всю висоту сторінки, навіть коли списки короткі */
+    .app-page .app-page-content { min-height: 100%; padding-bottom: 24px; }
+    .app-page .page-grid { flex: 1; }
+    .app-page .page-grid:not(.page-grid-fill) > .page-grid-main { width: 100%; max-width: 960px; justify-self: center; }
+    .focus-view .page-grid { grid-template-columns: minmax(320px, min(32cqw, 400px)) minmax(0, 1fr); }
   }
   @container workspace (max-width: 959px) {
     .notebook-view[data-detail='false'] .page-grid-main { display: none; }
