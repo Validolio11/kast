@@ -78,7 +78,7 @@ export function Palette({ open, onClose, label, children }: { open: boolean; onC
   return createPortal(
     <div className="modal-root fixed inset-0 z-[100] flex justify-center p-4 pt-[12vh]">
       <div onClick={onClose} aria-hidden className={cn('absolute inset-0 bg-canvas/80 backdrop-blur-sm', state === 'open' ? 'animate-fade-in' : 'animate-fade-out')} />
-      <div aria-hidden className="drag absolute inset-x-0 top-0 h-[76px]" />
+      <div aria-hidden className="drag absolute top-0 right-[180px] left-0 h-[76px]" />
       <div
         ref={ref}
         role="dialog"
@@ -115,7 +115,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         className={cn('absolute inset-0 bg-canvas/80 backdrop-blur-sm', state === 'open' ? 'animate-fade-in' : 'animate-fade-out')}
       />
       {/* Смуга шапки лишається «ручкою» вікна: з відкритим діалогом його так само можна перетягувати */}
-      <div aria-hidden className="drag absolute inset-x-0 top-0 h-[76px]" />
+      <div aria-hidden className="drag absolute top-0 right-[180px] left-0 h-[76px]" />
       <div
         ref={ref}
         role="dialog"
@@ -178,7 +178,7 @@ export function Sheet({ open, onClose, title, description, children, footer, sid
         aria-hidden
         className={cn('absolute inset-0 bg-night/70 backdrop-blur-sm', state === 'open' ? 'animate-fade-in' : 'animate-fade-out')}
       />
-      <div aria-hidden className="drag absolute inset-x-0 top-0 h-[76px]" />
+      <div aria-hidden className="drag absolute top-0 right-[180px] left-0 h-[76px]" />
       <div
         ref={ref}
         role="dialog"

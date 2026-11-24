@@ -655,6 +655,9 @@
 /* Не дрібніше 22px: якщо й так слово не вміщається (посилання) — переноситься посеред слова */
 .now-title { font-size: max(22px, min(var(--now-size, 44px), calc(100cqi / (var(--now-longest, 8) * 0.66)))); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; }
 
+/* Кнопки вікна завжди над діалогами й затемненням: згорнути чи закрити Kast можна будь-коли */
+.desktop-window-controls { position: relative; z-index: 110; }
+
 /* Меню зліва та заголовок у шапці — лише для комп’ютера. */
 :root { --kast-gutter: 24px; --kast-layout-gap: clamp(20px, 2vw, 32px); }
 .app-workspace { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
