@@ -5,7 +5,7 @@
  */
 import { app, safeStorage } from 'electron'
 import { createHash, randomBytes } from 'node:crypto'
-import { readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { GTask, GTasksStatus, KastSyncAction, KastSyncItem } from '../shared/types'
 import { openOAuth, prepareOAuth } from './auth'
@@ -52,11 +52,17 @@ function load(): Stored | null {
   return stored
 }
 
+/** Через тимчасовий файл: обірваний запис не «відключить» Google Tasks і не загубить зв'язки (інакше — дублікати) */
+function writeStore(s: Stored) {
+  writeFileSync(`${file()}.tmp`, JSON.stringify(s))
+  renameSync(`${file()}.tmp`, file())
+}
+
 function persist(s: Stored | null) {
   stored = s
   access = null
   try {
-    if (s) writeFileSync(file(), JSON.stringify(s))
+    if (s) writeStore(s)
     else rmSync(file(), { force: true })
   } catch (e) {
     console.error('google tasks store failed', e)
@@ -260,7 +266,7 @@ function persistLinks(patch: Pick<Stored, 'kastList' | 'links'>) {
   if (!s) return
   stored = { ...s, ...patch }
   try {
-    writeFileSync(file(), JSON.stringify(stored))
+    writeStore(stored)
   } catch (e) {
     console.error('google tasks store failed', e)
   }
@@ -297,71 +303,85 @@ async function run(items: KastSyncItem[]): Promise<KastSyncAction[]> {
     return !g || g.deleted
   })
   const massLoss = missing.length > 5 && missing.length * 2 > linked.length
+  // Зв'язки бачить лише цей ПК: незв'язана відкрита задача з тією самою назвою — копія з іншого ПК (чи додана вручну).
+  // Прив'язуємося до неї, а не створюємо двійника. Виконані не беремо: старе «Кава» не має закрити нове.
+  const taken = new Set(Object.values(links).map((l) => l.g))
 
-  for (const it of items) {
-    const link = links[it.id]
-    if (!link) {
-      // Уже виконане до підключення в Google не несемо
-      if (it.done) continue
-      const made = await api<{ id: string }>(base, {
-        method: 'POST',
-        body: JSON.stringify({ title: it.title, notes: it.notes || undefined, due: it.due ? iso(it.due) : undefined }),
-      })
-      links[it.id] = { g: made.id, done: false, title: it.title }
-      continue
+  // Зв'язки зберігаємо навіть при помилці посередині: інакше вже створені в Google задачі створились би вдруге
+  try {
+    for (const it of items) {
+      const link = links[it.id]
+      if (!link) {
+        // Уже виконане до підключення в Google не несемо
+        if (it.done) continue
+        const twin = [...remote.values()].find((g) => !g.deleted && g.status !== 'completed' && !taken.has(g.id) && (g.title ?? '').trim() === it.title)
+        if (twin) {
+          links[it.id] = { g: twin.id, done: false, title: it.title }
+          taken.add(twin.id)
+          continue
+        }
+        const made = await api<{ id: string }>(base, {
+          method: 'POST',
+          body: JSON.stringify({ title: it.title, notes: it.notes || undefined, due: it.due ? iso(it.due) : undefined }),
+        })
+        links[it.id] = { g: made.id, done: false, title: it.title }
+        taken.add(made.id)
+        continue
+      }
+      if (!link.g) continue
+      const g = remote.get(link.g)
+      if (!g || g.deleted) {
+        if (massLoss) {
+          // Запобіжник: задача лишається в Kast, лише перестає синхронізуватися
+          links[it.id] = { ...link, g: null }
+        } else {
+          actions.push({ id: it.id, deleted: true })
+          delete links[it.id]
+        }
+        continue
+      }
+      const body: Record<string, unknown> = {}
+      const gDone = g.status === 'completed'
+      if (gDone !== it.done) {
+        if (gDone !== link.done) {
+          actions.push({ id: it.id, done: gDone })
+          link.done = gDone
+        } else {
+          body.status = it.done ? 'completed' : 'needsAction'
+          if (!it.done) body.completed = null
+          link.done = it.done
+        }
+      } else link.done = it.done
+      const gTitle = (g.title ?? '').trim()
+      if (gTitle && gTitle !== it.title) {
+        if (gTitle !== link.title) {
+          actions.push({ id: it.id, title: gTitle })
+          link.title = gTitle
+        } else {
+          body.title = it.title
+          link.title = it.title
+        }
+      } else link.title = it.title
+      // Дату веде Kast: «Сьогодні» — з датою, Вхідні — без
+      const gDue = g.due?.slice(0, 10)
+      if ((gDue ?? null) !== (it.due ?? null)) body.due = it.due ? iso(it.due) : null
+      if (Object.keys(body).length) await patch(link.g, body)
+      links[it.id] = link
     }
-    if (!link.g) continue
-    const g = remote.get(link.g)
-    if (!g || g.deleted) {
-      if (massLoss) {
-        // Запобіжник: задача лишається в Kast, лише перестає синхронізуватися
-        links[it.id] = { ...link, g: null }
-      } else {
-        actions.push({ id: it.id, deleted: true })
-        delete links[it.id]
-      }
-      continue
-    }
-    const body: Record<string, unknown> = {}
-    const gDone = g.status === 'completed'
-    if (gDone !== it.done) {
-      if (gDone !== link.done) {
-        actions.push({ id: it.id, done: gDone })
-        link.done = gDone
-      } else {
-        body.status = it.done ? 'completed' : 'needsAction'
-        if (!it.done) body.completed = null
-        link.done = it.done
-      }
-    } else link.done = it.done
-    const gTitle = (g.title ?? '').trim()
-    if (gTitle && gTitle !== it.title) {
-      if (gTitle !== link.title) {
-        actions.push({ id: it.id, title: gTitle })
-        link.title = gTitle
-      } else {
-        body.title = it.title
-        link.title = it.title
-      }
-    } else link.title = it.title
-    // Дату веде Kast: «Сьогодні» — з датою, Вхідні — без
-    const gDue = g.due?.slice(0, 10)
-    if ((gDue ?? null) !== (it.due ?? null)) body.due = it.due ? iso(it.due) : null
-    if (Object.keys(body).length) await patch(link.g, body)
-    links[it.id] = link
-  }
 
-  // Задачі, яких більше немає серед відкритих чи нещодавно виконаних, прибираємо з Google.
-  // Порожній список від Kast при наявних зв'язках — підозріло (база ще не завантажилась), нічого не видаляємо.
-  const keep = new Set(items.map((i) => i.id))
-  const gone = Object.keys(links).filter((id) => !keep.has(id))
-  if (items.length || gone.length <= 3) {
-    for (const id of gone) {
-      const g = links[id].g
-      if (g && remote.has(g)) await api(`${base}/${encodeURIComponent(g)}`, { method: 'DELETE' }).catch(() => undefined)
-      delete links[id]
+    // Задачі, яких більше немає серед відкритих чи нещодавно виконаних, прибираємо з Google.
+    // Порожній список від Kast при наявних зв'язках — підозріло (база ще не завантажилась), нічого не видаляємо.
+    const keep = new Set(items.map((i) => i.id))
+    const gone = Object.keys(links).filter((id) => !keep.has(id))
+    if (items.length || gone.length <= 3) {
+      for (const id of gone) {
+        const g = links[id].g
+        if (g && remote.has(g)) await api(`${base}/${encodeURIComponent(g)}`, { method: 'DELETE' }).catch(() => undefined)
+        delete links[id]
+      }
     }
+  } finally {
+    persistLinks({ kastList: listId, links })
   }
-  persistLinks({ kastList: listId, links })
   return actions
 }

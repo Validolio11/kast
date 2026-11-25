@@ -653,7 +653,9 @@
 /* «Зараз»: розмір назви за найдовшим словом — слово ніколи не рветься; дуже довга назва — до 5 рядків */
 .now-text { container-type: inline-size; }
 /* Не дрібніше 22px: якщо й так слово не вміщається (посилання) — переноситься посеред слова */
-.now-title { font-size: max(22px, min(var(--now-size, 44px), calc(100cqi / (var(--now-longest, 8) * 0.66)))); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; }
+.now-title { font-size: max(22px, min(var(--now-size, 44px), calc(100cqi / (var(--now-longest, 8) * 0.66)))); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden;
+  /* Рядок 0.95 + overflow: hidden зрізали б хвости «у», «р» і крапки «Ї» — запас усередині, компенсація назовні */
+  padding-block: 0.08em 0.16em; margin-block: -0.08em -0.16em; }
 
 /* Кнопки вікна завжди над діалогами й затемненням: згорнути чи закрити Kast можна будь-коли */
 .desktop-window-controls { position: relative; z-index: 110; }

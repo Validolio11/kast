@@ -135,6 +135,9 @@ function createCapture() {
     webPreferences: webPreferences(),
   })
   capture.loadURL(pageUrl('capture'))
+  // Кинутий файл не має відкритися замість поля запису (і отримати доступ до window.kast)
+  capture.webContents.on('will-navigate', (e) => e.preventDefault())
+  capture.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   capture.on('blur', () => capture?.hide())
   capture.on('close', (e) => {
     if (quitting) return

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, Card, CheckCircle, cn, ContextMenu, EnteringContext, Icon, PageGrid, PulseChip, RoundButton, SegTabs, Stepper, useToast, type MenuAction } from '@/design-system'
 import { WHEN_OPTIONS } from '@/components/TaskRow'
+import { pauseTimer, PRESETS, resetTimer, secondsLeft, startTimer, timerOf, useTimers } from '@/lib/timebox'
 import { useEntering } from '@/components/Page'
 import { useTask } from '@/data/hooks'
 import { addSteps, captureToInbox, complete, finishStep, remove, REPEAT_MAX, repeatLabel, repeatNext, setKind, setRepeat, setSteps, takeToToday, toInbox, update } from '@/data/tasks'
@@ -513,60 +514,16 @@ function Field({
   )
 }
 
-const PRESETS = [15, 25, 45]
-
-/**
- * Таймери живуть поза компонентом: вийшли з Фокусу — відлік триває, повернулися — бачите залишок,
- * а сповіщення «Час вийшов» прийде навіть з іншої вкладки.
- */
-interface TimerState {
-  minutes: number
-  /** Коли закінчиться (якщо йде) */
-  endAt: number | null
-  /** Скільки лишилося секунд (якщо на паузі) */
-  left: number
-  alarm?: ReturnType<typeof setTimeout>
-}
-const timers = new Map<string, TimerState>()
-
-function timerOf(id: string): TimerState {
-  return timers.get(id) ?? { minutes: 25, endAt: null, left: 25 * 60 }
-}
-const secondsLeft = (t: TimerState) => (t.endAt ? Math.max(0, Math.round((t.endAt - Date.now()) / 1000)) : t.left)
-
-/** Таймбокс на панелі data: цифра — герой, пресет, старт, пауза */
+/** Таймбокс на панелі data: цифра — герой, пресет, старт, пауза. Стан живе в lib/timebox — відлік триває поза Фокусом */
 function Timer({ task }: { task: Task }) {
-  const [state, setState] = useState(() => timerOf(task.id))
-  const [, tick] = useState(0)
+  useTimers()
+  const state = timerOf(task.id)
   const running = state.endAt !== null
   const left = secondsLeft(state)
   const minutes = state.minutes
-
-  const save = (next: TimerState) => {
-    clearTimeout(timerOf(task.id).alarm)
-    if (next.endAt) {
-      const title = task.title
-      next.alarm = setTimeout(() => {
-        timers.set(task.id, { minutes: next.minutes, endAt: null, left: 0 })
-        window.kast?.notify('Час вийшов', `${title} — зробіть паузу або позначте як готово.`)
-      }, next.endAt - Date.now())
-    }
-    timers.set(task.id, next)
-    setState(next)
-  }
-
-  useEffect(() => {
-    if (!running) return
-    const t = setInterval(() => {
-      tick((n) => n + 1)
-      if (secondsLeft(timerOf(task.id)) === 0) setState(timerOf(task.id))
-    }, 250)
-    return () => clearInterval(t)
-  }, [running, task.id])
-
-  const start = () => save({ minutes, endAt: Date.now() + (left || minutes * 60) * 1000, left: 0 })
-  const pause = () => save({ minutes, endAt: null, left })
-  const pick = (m: number) => save({ minutes: m, endAt: null, left: m * 60 })
+  const start = () => startTimer(task.id, task.title)
+  const pause = () => pauseTimer(task.id)
+  const pick = (m: number) => resetTimer(task.id, m)
   const mm = String(Math.floor(left / 60)).padStart(2, '0')
   const ss = String(left % 60).padStart(2, '0')
   const remaining = minutes ? left / (minutes * 60) : 0

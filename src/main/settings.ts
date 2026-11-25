@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Settings } from '../shared/types'
 
@@ -31,7 +31,9 @@ export function load(): Stored {
 export function save(patch: Partial<Stored>): Stored {
   cache = { ...load(), ...patch }
   try {
-    writeFileSync(file(), JSON.stringify(cache, null, 2))
+    // Через тимчасовий файл: обірваний запис (вимкнули світло) не обнулить налаштування
+    writeFileSync(`${file()}.tmp`, JSON.stringify(cache, null, 2))
+    renameSync(`${file()}.tmp`, file())
   } catch (e) {
     console.error('settings save failed', e)
   }

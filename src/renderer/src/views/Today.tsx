@@ -3,6 +3,7 @@ import { Button, CaptureField, Card, Icon, InfoRow, ListSection, PulseChip, Puls
 import { ageOf, TaskRow, WHEN_OPTIONS } from '@/components/TaskRow'
 import { Page } from '@/components/Page'
 import { GoogleTasksSection } from '@/components/GoogleTasks'
+import { WordCard } from '@/components/WordCard'
 import { useDay, useLeftovers, useStatus, useToday } from '@/data/hooks'
 import { addToToday, MAIN_LIMIT, markPlanned, SMALL_LIMIT, takeToToday, toInbox, type Placement } from '@/data/tasks'
 import type { Task } from '@/data/db'
@@ -115,6 +116,8 @@ export function Today({
               <span className="text-[15px] font-extrabold text-white tabular-nums">{Math.round((done.length / total) * 100)}%</span>
             </InfoRow>
           )}
+
+          {loaded && <WordCard date={date} />}
 
           {evening && (
             <InfoRow tone="accent" icon="moon" title="Час закрити день" tip="Три кроки — і голова вільна до завтра">

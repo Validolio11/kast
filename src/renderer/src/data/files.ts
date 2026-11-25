@@ -47,7 +47,8 @@ const FILE_GRACE_MS = 30 * 86_400_000
  */
 export async function cleanupFiles() {
   const cutoff = now() - FILE_GRACE_MS
-  const old = (await db.files.toArray()).filter((f) => !f.deleted && f.updatedAt < cutoff)
+  // Лише ключі кандидатів: самі зображення (base64, сотні КБ) у пам'ять не збираємо
+  const old = (await db.files.filter((f) => !f.deleted && f.updatedAt < cutoff).primaryKeys()) as string[]
   if (!old.length) return
   const used = new Set<string>()
   const scan = (html?: string) => {
@@ -56,7 +57,7 @@ export async function cleanupFiles() {
   for (const n of await db.notes.toArray()) if (!n.deleted) [n.html, ...(n.pages ?? [])].forEach(scan)
   for (const t of await db.tasks.toArray()) if (!t.deleted) scan(t.notesHtml)
   const t = now()
-  for (const f of old) if (!used.has(f.id)) await db.files.update(f.id, { deleted: 1, data: '', updatedAt: t, dirty: 1 })
+  for (const id of old) if (!used.has(id)) await db.files.update(id, { deleted: 1, data: '', updatedAt: t, dirty: 1 })
 }
 
 /** Зберегти фото на диск: Electron покаже стандартне вікно «Зберегти як» */

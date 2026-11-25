@@ -110,11 +110,12 @@ function Shell() {
   // Тихе старіння Вхідних: при старті й щогодини
   useEffect(() => {
     markLegacyQuickNote()
+    // Спершу зміни з хмари: інакше «старіння» за вчорашнім станом цього ПК перекрило б задачу, взяту на сьогодні з телефона.
     // Фото, яких давно немає в жодній нотатці, — лише коли пристрій бачить усе з хмари
     afterFirstPull()
+      .then(sweepStale)
       .then(() => (upToDate() ? cleanupFiles() : undefined))
-      .catch((e) => console.error('photo cleanup failed', e))
-    sweepStale()
+      .catch((e) => console.error('startup cleanup failed', e))
     const t = setInterval(sweepStale, 60 * 60_000)
     return () => clearInterval(t)
   }, [])
